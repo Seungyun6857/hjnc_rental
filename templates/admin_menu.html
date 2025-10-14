@@ -1,0 +1,453 @@
+{% extends "base_admin.html" %}
+
+{% block title %}대시보드 | 관리자{% endblock %}
+{% block layout_extra_class %}has-footer{% endblock %}
+
+{% block content %}
+<!-- 상단 바 -->
+<div class="bg-white border rounded-3 px-3 py-2 d-flex align-items-center justify-content-between mb-3" style="min-height:44px;">
+  <div class="fw-semibold text-muted">우주정보통신</div>
+  <div class="d-flex align-items-center gap-2">
+    <span class="badge bg-light text-dark border" id="sessionTimer">60:00</span>
+    <button type="button" class="btn btn-sm btn-danger" id="btnExtend">연장/업그레이드</button>
+    <a href="{{ url_for('admin_logout') }}" class="btn btn-sm btn-secondary">나가기</a>
+  </div>
+</div>
+
+<!-- 일정관리 + 오늘의 할 일 -->
+<div class="row g-3">
+  <!-- 캘린더 -->
+  <div class="col-12 col-lg-8">
+    <div class="card" style="height: 450px;">
+      <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+        <div>일정관리</div>
+
+        <!-- 캘린더 현재 월/연도 표기 (iframe -> postMessage 수신) -->
+        <div class="flex-grow-1 text-center">
+          <div id="current-date" class="text-white fw-bold"></div>
+        </div>
+
+        <!-- 캘린더 네비게이션 -->
+        <div class="d-flex gap-1">
+          <button class="btn btn-secondary btn-sm" onclick="postCalendarNav('today')">today</button>
+          <button class="btn btn-dark btn-sm" onclick="postCalendarNav('prev')">&lt;</button>
+          <button class="btn btn-dark btn-sm" onclick="postCalendarNav('next')">&gt;</button>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <iframe id="calendarIframe" src="/calendar" style="width:100%;height:100%;border:none;"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <!-- 오늘의 할 일 위젯 -->
+  <div class="col-12 col-lg-4">
+    <div class="card h-100">
+      <div class="card-header bg-secondary text-white d-flex align-items-center justify-content-between">
+        <span>오늘의 할 일</span>
+        <div class="small">
+          <span class="badge bg-light text-dark"><span id="todo-count-active">0</span> 진행</span>
+          <span class="badge bg-dark ms-1"><span id="todo-count-total">0</span> 전체</span>
+        </div>
+      </div>
+
+      <div class="card-body">
+        <!-- 입력 -->
+        <form id="todo-form" class="mb-3" autocomplete="off">
+          <div class="input-group">
+            <input id="todo-input" type="text" class="form-control" placeholder="할 일을 입력하고 Enter">
+            <button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg"></i></button>
+          </div>
+          <div class="form-text">Enter로 추가, 항목을 체크하면 완료 처리됩니다.</div>
+        </form>
+
+        <!-- 필터 -->
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="btn-group btn-group-sm" role="group" aria-label="filter">
+            <button type="button" class="btn btn-outline-secondary active" data-filter="all">전체</button>
+            <button type="button" class="btn btn-outline-secondary" data-filter="active">진행</button>
+            <button type="button" class="btn btn-outline-secondary" data-filter="done">완료</button>
+          </div>
+          <div class="d-flex gap-2">
+            <button id="btn-clear-done" class="btn btn-sm btn-outline-secondary"><i class="bi bi-check2-all me-1"></i>완료 비우기</button>
+            <button id="btn-clear-all"  class="btn btn-sm btn-outline-danger"><i class="bi bi-trash3 me-1"></i>전체 삭제</button>
+          </div>
+        </div>
+
+        <!-- 목록 -->
+        <ul id="todo-list" class="list-group list-group-flush"></ul>
+      </div>
+
+      <div class="card-footer text-muted small">
+        * 이 목록은 이 브라우저에만 저장됩니다(localStorage).
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ===== 캘린더 현재 월/연도 반영
+  window.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'updateCurrentDate') {
+      document.getElementById('current-date').textContent = event.data.dateText || '';
+    }
+  });
+  function postCalendarNav(command) {
+    const ifr = document.getElementById('calendarIframe');
+    if (ifr && ifr.contentWindow) {
+      ifr.contentWindow.postMessage({ type: 'calendarNav', command }, '*');
+    }
+  }
+
+  // ===== 오늘의 할 일 (localStorage: admin.todos)
+  (function () {
+    const KEY = 'admin.todos';
+    /** @type {HTMLUListElement} */ const listEl = document.getElementById('todo-list');
+    const formEl   = document.getElementById('todo-form');
+    const inputEl  = document.getElementById('todo-input');
+    const btnClearDone = document.getElementById('btn-clear-done');
+    const btnClearAll  = document.getElementById('btn-clear-all');
+    const countActiveEl= document.getElementById('todo-count-active');
+    const countTotalEl = document.getElementById('todo-count-total');
+    let filter = 'all'; // all | active | done
+
+    function load() {
+      try { return JSON.parse(localStorage.getItem(KEY) || '[]'); }
+      catch { return []; }
+    }
+    function save(arr) { localStorage.setItem(KEY, JSON.stringify(arr)); }
+    function uid() { return 't' + Math.random().toString(36).slice(2, 10); }
+
+    function render() {
+      const items = load();
+      const filtered = items.filter(it =>
+        filter === 'all' ? true : (filter === 'active' ? !it.done : it.done)
+      );
+      listEl.innerHTML = filtered.length
+        ? filtered.map(it => liTemplate(it)).join('')
+        : `<li class="list-group-item text-center text-muted py-3">할 일이 없습니다.</li>`;
+
+      // 이벤트 바인딩
+      listEl.querySelectorAll('input[type=checkbox]').forEach(cb => {
+        cb.addEventListener('change', (e) => {
+          const id = e.target.getAttribute('data-id');
+          toggleDone(id, e.target.checked);
+        });
+      });
+      listEl.querySelectorAll('[data-action=del]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          remove(btn.getAttribute('data-id'));
+        });
+      });
+
+      // 카운트
+      const active = items.filter(it=>!it.done).length;
+      countActiveEl.textContent = active;
+      countTotalEl.textContent  = items.length;
+    }
+
+    function liTemplate(it){
+      const cls = it.done ? 'text-decoration-line-through text-muted' : '';
+      return `
+        <li class="list-group-item d-flex align-items-center justify-content-between">
+          <div class="form-check">
+            <input class="form-check-input me-2" type="checkbox" ${it.done ? 'checked' : ''} data-id="${it.id}" id="todo-${it.id}">
+            <label class="form-check-label ${cls}" for="todo-${it.id}">${escapeHtml(it.text)}</label>
+          </div>
+          <button class="btn btn-sm btn-outline-danger" data-action="del" data-id="${it.id}" title="삭제">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </li>`;
+    }
+
+    function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+    function add(text){
+      const t = text.trim();
+      if(!t) return;
+      const items = load();
+      items.unshift({ id: uid(), text: t, done: false, createdAt: Date.now() });
+      save(items);
+      inputEl.value = '';
+      render();
+    }
+
+    function toggleDone(id, v){
+      const items = load();
+      const idx = items.findIndex(x=>x.id===id);
+      if(idx>=0){ items[idx].done = !!v; save(items); render(); }
+    }
+
+    function remove(id){
+      save(load().filter(x=>x.id!==id));
+      render();
+    }
+
+    function clearDone(){
+      save(load().filter(x=>!x.done));
+      render();
+    }
+
+    function clearAll(){
+      if(confirm('모든 할 일을 삭제할까요?')){ save([]); render(); }
+    }
+
+    // 이벤트
+    formEl.addEventListener('submit', (e)=>{
+      e.preventDefault();
+      add(inputEl.value);
+    });
+    btnClearDone.addEventListener('click', (e)=>{ e.preventDefault(); clearDone(); });
+    btnClearAll.addEventListener('click',  (e)=>{ e.preventDefault(); clearAll(); });
+
+    document.querySelectorAll('[data-filter]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        document.querySelectorAll('[data-filter]').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        filter = btn.getAttribute('data-filter');
+        render();
+      });
+    });
+
+    render();
+  })();
+</script>
+
+<!-- 장비 현황 + 공지사항 -->
+<div class="row g-3 mt-1">
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header bg-info text-white">장비 현황</div>
+      <div class="card-body">
+        <p class="mb-0 text-muted">여기에 장비 현황 차트(Pie chart 등)를 넣을 수 있습니다.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+        공지사항
+        <a href="{{ url_for('admin_board_type', board_type='all') }}" class="btn btn-sm btn-outline-light">더보기</a>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-hover table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="width:30%;">날짜</th>
+              <th>제목</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% if posts and posts|length > 0 %}
+            {% for p in posts %}
+              <tr>
+                <td>{{ (p.created_at|default(''))[:10] }}</td>
+                <td><a href="{{ url_for('view_board_post', post_id=p.id) }}">{{ p.title }}</a></td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="2" class="text-center text-muted">등록된 공지사항이 없습니다.</td></tr>
+          {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 일정 모달 -->
+<div class="modal fade" id="scheduleModal" tabindex="-1" aria-labelledby="scheduleModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="scheduleModalLabel">일정</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="닫기"></button>
+      </div>
+      <div class="modal-body">
+        <form>
+          <div class="row g-2 mb-3">
+            <div class="col-md-8">
+              <label class="form-label">제목</label>
+              <input id="schedule-title" type="text" class="form-control" placeholder="제목 입력">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">캘린더</label>
+              <select class="form-select" disabled>
+                <option>개인일정캘린더</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-md-6">
+              <label class="form-label">날짜/시간 (시작)</label>
+              <input id="schedule-start" type="datetime-local" class="form-control">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">날짜/시간 (종료)</label>
+              <input id="schedule-end" type="datetime-local" class="form-control">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">비고</label>
+            <textarea id="schedule-note" class="form-control" rows="3" placeholder="내용 입력"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button id="deleteScheduleBtn" type="button" class="btn btn-danger d-none">삭제</button>
+        <button id="saveScheduleBtn"   type="button" class="btn btn-primary">저장</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 캘린더 모달과 상호작용
+  let selectedDate = null;
+  let editMode     = false;
+  let editEventId  = null;
+
+  window.addEventListener('message', (event) => {
+    const data = event.data || {};
+    const modalEl = document.getElementById('scheduleModal');
+    const modal   = new bootstrap.Modal(modalEl);
+    const delBtn  = document.getElementById('deleteScheduleBtn');
+
+    if (data.type === 'openScheduleModal') {
+      editMode    = false;
+      editEventId = null;
+      selectedDate = data.start || null;
+
+      document.getElementById('schedule-title').value = '';
+      document.getElementById('schedule-start').value = '';
+      document.getElementById('schedule-end').value   = '';
+      document.getElementById('schedule-note').value  = '';
+      delBtn.classList.add('d-none');
+      modal.show();
+    }
+
+    if (data.type === 'editScheduleModal') {
+      editMode    = true;
+      editEventId = data.id;
+
+      document.getElementById('schedule-title').value = data.title || '';
+      document.getElementById('schedule-start').value = data.start || '';
+      document.getElementById('schedule-end').value   = data.end   || '';
+      document.getElementById('schedule-note').value  = data.note  || '';
+      delBtn.classList.remove('d-none');
+      modal.show();
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const ifr = document.getElementById('calendarIframe');
+
+    document.getElementById('saveScheduleBtn').addEventListener('click', () => {
+      let title = document.getElementById('schedule-title').value.trim();
+      let start = document.getElementById('schedule-start').value;
+      let end   = document.getElementById('schedule-end').value;
+      let note  = document.getElementById('schedule-note').value ?? '';
+
+      if (!title) title = '제목 없음';
+      if (!start && selectedDate) start = selectedDate;
+      if (!end   && start)         end   = start;
+
+      if (ifr && ifr.contentWindow) {
+        ifr.contentWindow.postMessage({
+          type : 'addEvent',
+          id   : editEventId,
+          title, start, end, note
+        }, '*');
+      }
+
+      const modal = bootstrap.Modal.getInstance(document.getElementById('scheduleModal'));
+      modal.hide();
+    });
+
+    document.getElementById('deleteScheduleBtn').addEventListener('click', () => {
+      if (!editEventId) return;
+      if (ifr && ifr.contentWindow) {
+        ifr.contentWindow.postMessage({ type: 'deleteEvent', id: editEventId }, '*');
+      }
+      const modal = bootstrap.Modal.getInstance(document.getElementById('scheduleModal'));
+      modal.hide();
+    });
+  });
+</script>
+
+<!-- ===== Idle(무활동) 60분 타이머 & 자동 로그아웃 ===== -->
+<script>
+(function () {
+  const IDLE_MINUTES = 60;
+  const LIMIT_MS = IDLE_MINUTES * 60 * 1000;
+  const STORAGE_KEY = "admin.lastActivityAt";
+  const timerEl = document.getElementById("sessionTimer");
+  const logoutURL = "{{ url_for('admin_logout') }}";
+  if (!timerEl) return;
+
+  const now = () => Date.now();
+
+  function getLastActivity() {
+    const v = parseInt(localStorage.getItem(STORAGE_KEY) || "0", 10);
+    if (!v) {
+      const t = now();
+      localStorage.setItem(STORAGE_KEY, String(t));
+      return t;
+    }
+    return v;
+  }
+  function setLastActivity(ts = now()) { localStorage.setItem(STORAGE_KEY, String(ts)); }
+  function formatMMSS(ms) {
+    if (ms < 0) ms = 0;
+    const mm = Math.floor(ms / 60000);
+    const ss = Math.floor((ms % 60000) / 1000);
+    return String(mm).padStart(2, "0") + ":" + String(ss).padStart(2, "0");
+  }
+  function doLogout() {
+    clearInterval(tickId);
+    timerEl.textContent = "00:00";
+    window.location.href = logoutURL;
+  }
+  function updateTimer() {
+    const remain = LIMIT_MS - (now() - getLastActivity());
+    if (remain <= 0) doLogout();
+    else timerEl.textContent = formatMMSS(remain);
+  }
+
+  let lastResetAt = 0;
+  function resetOnActivity() {
+    const t = now();
+    if (t - lastResetAt < 800) return;
+    lastResetAt = t;
+    setLastActivity(t);
+    updateTimer();
+  }
+
+  ["click","keydown","mousemove","wheel","scroll","touchstart","touchmove","pointerdown","visibilitychange"]
+    .forEach(evt => document.addEventListener(evt, resetOnActivity, { passive: true }));
+
+  const extendBtn = document.getElementById("btnExtend");
+  if (extendBtn) extendBtn.addEventListener("click", resetOnActivity);
+
+  window.addEventListener("storage", (e) => {
+    if (e.key === STORAGE_KEY) updateTimer();
+  });
+
+  setLastActivity(getLastActivity());
+  updateTimer();
+  const tickId = setInterval(updateTimer, 1000);
+})();
+</script>
+{% endblock %}
+
+{% block footer %}
+<footer class="site-footer">
+  <div class="container text-center small text-muted">
+    {% include 'partials/footer.html' %}
+  </div>
+</footer>
+{% endblock %}

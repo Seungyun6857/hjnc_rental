@@ -1,0 +1,659 @@
+{% extends "base_admin.html" %}
+{% block content %}
+
+<div class="container-fluid py-3">
+
+  <!-- 헤더 -->
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div class="d-flex align-items-center gap-3">
+      <h3 class="m-0 d-flex align-items-center gap-2">
+        <i class="bi bi-journal-medical text-primary"></i>
+        업무 메뉴얼
+      </h3>
+      <span class="text-muted small">최종 업데이트: {{ manual.get('last_updated') or '미설정' }}</span>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2">
+      <div class="input-group">
+        <span class="input-group-text"><i class="bi bi-search"></i></span>
+        <input id="manualSearch" type="search" class="form-control" placeholder="메뉴얼 검색 (제목·설명·조치·연락처)">
+      </div>
+      <button id="btnExpandAll" class="btn btn-outline-secondary">
+        <i class="bi bi-arrows-expand me-1"></i>전체 펼치기
+      </button>
+      <button id="btnCollapseAll" class="btn btn-outline-secondary">
+        <i class="bi bi-arrows-collapse me-1"></i>전체 접기
+      </button>
+      <button class="btn btn-outline-primary" onclick="window.print()">
+        <i class="bi bi-printer me-1"></i>인쇄
+      </button>
+      <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalSectionAdd">
+        <i class="bi bi-folder-plus me-1"></i>섹션 추가
+      </button>
+    </div>
+  </div>
+
+  <!-- 섹션 빠른이동 -->
+  {% set sections = manual.get('sections', []) %}
+  {% if sections %}
+  <div class="mb-3">
+    <div class="d-flex flex-wrap gap-2">
+      {% for sec in sections %}
+        <a class="btn btn-sm btn-outline-dark" href="#sec-{{ sec.get('id') }}">{{ sec.get('title') }}</a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- 본문 -->
+  <div class="accordion" id="manualAccordion">
+    {% for sec in sections %}
+      {% set items = sec.get('items', []) %}
+      <div class="accordion-item shadow-sm" id="sec-{{ sec.get('id') }}">
+        <h2 class="accordion-header">
+          <button class="accordion-button {{ '' if loop.first else 'collapsed' }}" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#sec-collapse-{{ sec.get('id') }}">
+            <span class="fw-semibold me-2">{{ sec.get('title') }}</span>
+            <span class="badge bg-secondary">{{ items|length }}</span>
+          </button>
+        </h2>
+
+        <div id="sec-collapse-{{ sec.get('id') }}" class="accordion-collapse collapse {{ 'show' if loop.first else '' }}"
+             data-bs-parent="#manualAccordion">
+          <div class="accordion-body">
+
+            <!-- 섹션 툴바 -->
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+              <div class="text-muted small d-flex align-items-center gap-2">
+                <i class="bi bi-folder me-1"></i>섹션 ID: <code>{{ sec.get('id') }}</code>
+              </div>
+              <div class="d-flex flex-wrap gap-2">
+                <button class="btn btn-outline-secondary btn-sm"
+                        data-bs-toggle="modal"
+                        data-bs-target="#modalSectionEdit"
+                        data-sec-id="{{ sec.get('id') }}"
+                        data-sec-title="{{ sec.get('title') }}">
+                  <i class="bi bi-pencil-square me-1"></i>섹션 이름 수정
+                </button>
+                <form method="post" action="{{ url_for('manual_section_delete', sec_id=sec.get('id')) }}"
+                      onsubmit="return confirm('섹션과 하위 항목이 모두 삭제됩니다. 진행할까요?');">
+                  <button class="btn btn-outline-danger btn-sm">
+                    <i class="bi bi-trash3 me-1"></i>섹션 삭제
+                  </button>
+                </form>
+                <button class="btn btn-primary btn-sm"
+                        data-bs-toggle="modal"
+                        data-bs-target="#modalItemAdd"
+                        data-sec-id="{{ sec.get('id') }}">
+                  <i class="bi bi-plus-lg me-1"></i>항목 추가
+                </button>
+              </div>
+            </div>
+
+            {% if items|length == 0 %}
+              <div class="border rounded p-4 text-center text-muted">
+                <i class="bi bi-inboxes display-6 d-block mb-2"></i>
+                이 섹션에는 아직 항목이 없습니다. <br>
+                오른쪽 상단 <strong>항목 추가</strong> 버튼으로 등록하세요.
+              </div>
+            {% endif %}
+
+            <div class="row g-3">
+              {% for item in items %}
+              <div class="col-12 manual-item"
+                   data-title="{{ (item.get('name') or '')|e }}"
+                   data-desc="{{ (item.get('description') or '')|e }}"
+                   data-actions="{{ ((item.get('actions') or [])|join(' '))|e }}"
+                   data-contacts="{{ ((item.get('contacts') or [])|join(' '))|e }}">
+                <div class="card h-100">
+                  <div class="card-body">
+                    <!-- 타이틀 + 툴버튼 -->
+                    <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-2">
+                      <div class="d-flex align-items-center gap-2">
+                        <h5 class="m-0">{{ item.get('name') }}</h5>
+                        {% if item.get('images_dir') %}
+                          <span class="badge rounded-pill text-bg-light border">
+                            <i class="bi bi-images me-1"></i>{{ item.get('images_dir') }}
+                          </span>
+                        {% endif %}
+                      </div>
+                      <div class="d-flex flex-wrap gap-2">
+                        <button class="btn btn-outline-secondary btn-sm"
+                                data-bs-toggle="modal"
+                                data-bs-target="#modalItemEdit"
+                                data-sec-id="{{ sec.get('id') }}"
+                                data-item-id="{{ item.get('id') }}"
+                                data-item-name="{{ item.get('name')|e }}"
+                                data-item-images-dir="{{ (item.get('images_dir') or '')|e }}"
+                                data-item-description="{{ (item.get('description') or '')|e }}"
+                                data-item-actions="{{ ((item.get('actions') or [])|join('\n'))|e }}"
+                                data-item-contacts="{{ ((item.get('contacts') or [])|join('\n'))|e }}"
+                                data-item-notes="{{ (item.get('notes') or '')|e }}">
+                          <i class="bi bi-pencil me-1"></i>수정
+                        </button>
+                        <form method="post"
+                              action="{{ url_for('manual_item_delete', sec_id=sec.get('id'), item_id=item.get('id')) }}"
+                              onsubmit="return confirm('이 항목을 삭제할까요?');">
+                          <button class="btn btn-outline-danger btn-sm">
+                            <i class="bi bi-trash3 me-1"></i>삭제
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+
+                    {# ====== STEP 갤러리 + 단계 리스트 ====== #}
+                    {% set imgs = item.get('images', []) %}
+                    {% set steps = item.get('actions', []) %}
+
+                    {% if imgs and imgs|length > 0 %}
+                      <!-- 상단: 이미지 격자 갤러리 (각 이미지 좌측 상단에 단계 번호 뱃지) -->
+                      <div class="row g-3 mb-3">
+                        {% for img in imgs %}
+                          <div class="col-12 col-md-6 col-lg-4">
+                            <figure class="step-figure position-relative m-0">
+                              <img src="{{ img }}" class="w-100 rounded step-img" alt="{{ item.get('name') }} 이미지 {{ loop.index }}">
+                              <div class="step-badge">{{ loop.index }}</div>
+                            </figure>
+                          </div>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+
+                    {% if steps and steps|length > 0 %}
+                      <div class="mb-3">
+                        <div class="fw-semibold mb-2 d-flex align-items-center gap-2">
+                          <i class="bi bi-list-ol"></i> 순서대로 따라하기
+                        </div>
+                        <ol class="step-list">
+                          {% for s in steps %}
+                            <li>
+                              <div class="step-num">{{ loop.index }}</div>
+                              <div class="step-text">{{ s }}</div>
+                            </li>
+                          {% endfor %}
+                        </ol>
+                        {% if imgs and steps and imgs|length != steps|length %}
+                          <div class="text-muted small mt-2">
+                            ※ 이미지 개수({{ imgs|length }})와 단계 텍스트 개수({{ steps|length }})가 다릅니다. 필요시 항목 수정에서 맞춰 주세요.
+                          </div>
+                        {% endif %}
+                      </div>
+                    {% endif %}
+
+                    {% if item.get('description') %}
+                      <p class="mb-3">{{ item.get('description') }}</p>
+                    {% endif %}
+
+                    <div class="row g-3">
+                      {% if item.get('contacts') and item.get('contacts')|length > 0 %}
+                      <div class="col-12">
+                        <div class="fw-semibold mb-1"><i class="bi bi-telephone me-1"></i>관련 연락처</div>
+                        <ul class="mb-0">
+                          {% for c in item.get('contacts') %}
+                            <li class="small">{{ c }}</li>
+                          {% endfor %}
+                        </ul>
+                      </div>
+                      {% endif %}
+                    </div>
+
+                    {% if item.get('notes') %}
+                      <div class="alert alert-warning mt-3 py-2 small mb-0">
+                        <i class="bi bi-exclamation-triangle me-1"></i>{{ item.get('notes') }}
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  {% if not sections %}
+    <div class="border rounded p-5 text-center text-muted mt-4">
+      <i class="bi bi-journal-x display-5 d-block mb-3"></i>
+      메뉴얼 데이터가 없습니다. <br>
+      오른쪽 상단 <strong>섹션 추가</strong> 버튼으로 새 섹션을 만들고 항목을 등록하세요.
+      <div class="small mt-3">
+        이미지가 보이지 않으면 <code>static/manual/&lt;폴더명&gt;/</code> 아래에 파일을 두세요. (jpg/jpeg/png/gif/webp 지원)
+      </div>
+    </div>
+  {% endif %}
+
+</div>
+
+<!-- ========== 섹션 추가 모달 ========== -->
+<div class="modal fade" id="modalSectionAdd" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form class="modal-content" method="post" action="{{ url_for('manual_section_add') }}">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-folder-plus me-2"></i>섹션 추가</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label">섹션 이름</label>
+        <input name="title" class="form-control" placeholder="예: YT 무전기, GATE NVR, 라우터/네트워크 등" required>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary">추가</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ========== 섹션 수정 모달 ========== -->
+<div class="modal fade" id="modalSectionEdit" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form id="formSectionEdit" class="modal-content" method="post">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>섹션 이름 수정</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="secEditId">
+        <label class="form-label">섹션 이름</label>
+        <input name="title" id="secEditTitle" class="form-control" required>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-success">저장</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ========== 항목 추가 모달 ========== -->
+<div class="modal fade" id="modalItemAdd" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <form class="modal-content" method="post" action="{{ url_for('manual_item_add') }}">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>항목 추가</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" name="sec_id" id="itemAddSecId">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">항목 이름</label>
+            <input name="name" class="form-control" placeholder="예: 사다리차 사용법, GATE NVR 배터리 교체" required>
+          </div>
+
+          <!-- 이미지 업로드 -->
+          <div class="col-12">
+            <label class="form-label">이미지 업로드</label>
+            <div class="d-flex gap-2 align-items-center mb-2">
+              <input id="add_target_dir" class="form-control" placeholder="폴더명(선택) 예: ladder_truck" style="max-width: 220px;">
+              <input id="add_files" type="file" multiple accept="image/*" class="form-control">
+              <button type="button" id="btnAddUpload" class="btn btn-outline-primary btn-sm">업로드</button>
+            </div>
+            <input name="images_dir" id="add_images_dir" class="form-control" placeholder="예: manual/ladder_truck">
+            <div class="form-text">
+              업로드하면 <code>/static/manual/&lt;폴더&gt;/</code> 아래 저장되고 위 입력칸에 <code>manual/&lt;폴더&gt;</code>가 자동 입력됩니다.
+            </div>
+            <div id="add_preview" class="mt-2 d-flex flex-wrap gap-2"></div>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">설명</label>
+            <textarea name="description" class="form-control" rows="3" placeholder="상황 설명, 증상 개요 등"></textarea>
+          </div>
+          <div class="col-12">
+            <label class="form-label">단계(줄바꿈으로 구분 / 이미지 순서와 맞추기)</label>
+            <textarea name="actions" class="form-control" rows="6" placeholder="1번 단계 설명&#10;2번 단계 설명&#10;..."></textarea>
+          </div>
+          <div class="col-12">
+            <label class="form-label">관련 연락처(줄바꿈으로 구분)</label>
+            <textarea name="contacts" class="form-control" rows="4" placeholder="부서/담당자 010-0000-0000"></textarea>
+          </div>
+          <div class="col-12">
+            <label class="form-label">참고 메모</label>
+            <input name="notes" class="form-control" placeholder="주의사항, 특이사항 등">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary">추가</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ========== 항목 수정 모달 ========== -->
+<div class="modal fade" id="modalItemEdit" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <form id="formItemEdit" class="modal-content" method="post">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>항목 수정</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="itemEditSecId">
+        <input type="hidden" id="itemEditItemId">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">항목 이름</label>
+            <input name="name" id="itemEditName" class="form-control" required>
+          </div>
+
+          <!-- 이미지 업로드/관리 -->
+          <div class="col-12">
+            <label class="form-label">이미지 업로드/관리</label>
+            <div class="d-flex gap-2 align-items-center mb-2">
+              <input id="edit_target_dir" class="form-control" placeholder="폴더명(선택)" style="max-width: 220px;">
+              <input id="edit_files" type="file" multiple accept="image/*" class="form-control">
+              <button type="button" id="btnEditUpload" class="btn btn-outline-primary btn-sm">업로드</button>
+            </div>
+            <input name="images_dir" id="itemEditImagesDir" class="form-control" placeholder="예: manual/yt_router">
+
+            <!-- 기존 이미지 관리 -->
+            <div class="mt-2">
+              <label class="form-label">기존 이미지</label>
+              <div id="edit_existing_list" class="d-flex flex-wrap gap-3"></div>
+              <div class="form-text">썸네일의 휴지통 아이콘으로 개별 삭제할 수 있습니다.</div>
+            </div>
+
+            <!-- 업로드 미리보기 -->
+            <div id="edit_preview" class="mt-2 d-flex flex-wrap gap-2"></div>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">설명</label>
+            <textarea name="description" id="itemEditDescription" class="form-control" rows="3"></textarea>
+          </div>
+          <div class="col-12">
+            <label class="form-label">단계(줄바꿈 구분)</label>
+            <textarea name="actions" id="itemEditActions" class="form-control" rows="6"></textarea>
+          </div>
+          <div class="col-12">
+            <label class="form-label">관련 연락처(줄바꿈 구분)</label>
+            <textarea name="contacts" id="itemEditContacts" class="form-control" rows="4"></textarea>
+          </div>
+          <div class="col-12">
+            <label class="form-label">참고 메모</label>
+            <input name="notes" id="itemEditNotes" class="form-control">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-success">저장</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+  /* 인쇄 최적화 */
+  @media print {
+    .sidebar, .input-group, #btnExpandAll, #btnCollapseAll, .btn, .modal { display:none !important; }
+    .content { padding:0 !important; }
+    .accordion-button { background:#f8f9fa !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .card { break-inside: avoid; page-break-inside: avoid; }
+  }
+
+  /* 이미지 격자 - 높이 제한 + 비율 유지 */
+  .step-img{
+    width:100%;
+    max-height:320px;     /* 필요시 280~380px로 조절 */
+    object-fit:contain;   /* 비율 유지 */
+    background:#f7f7f9;
+  }
+  .step-figure { overflow:hidden; position:relative; }
+  .step-badge{
+    position:absolute; top:8px; left:8px;
+    width:36px; height:36px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:14px;
+    background:#0d6efd; color:#fff;
+    box-shadow:0 2px 6px rgba(0,0,0,.15);
+  }
+
+  /* 하단 단계 리스트 (번호 + 텍스트) */
+  .step-list{
+    list-style:none; margin:0; padding:0;
+    display:flex; flex-direction:column; gap:.5rem;
+  }
+  .step-list > li{
+    display:flex; gap:.75rem; align-items:flex-start;
+    background:#fafafa; border:1px solid #eee; border-radius:.5rem;
+    padding:.5rem .75rem;
+  }
+  .step-num{
+    min-width:28px; height:28px; border-radius:50%;
+    background:#0d6efd; color:#fff; font-weight:700;
+    display:flex; align-items:center; justify-content:center;
+    margin-top:.15rem; font-size:13px;
+  }
+  .step-text{ flex:1; }
+
+  /* 편집 모달 썸네일 */
+  .thumb {
+    width: 120px; height: 90px; object-fit: cover;
+    border: 1px solid #e5e7eb; border-radius: 8px;
+  }
+</style>
+
+<script>
+  // 검색
+  (function () {
+    const input = document.getElementById('manualSearch');
+    const items = Array.from(document.querySelectorAll('.manual-item'));
+    if (!input) return;
+    input.addEventListener('input', () => {
+      const q = input.value.trim().toLowerCase();
+      items.forEach(it => {
+        const hay = (
+          (it.dataset.title || '') + ' ' +
+          (it.dataset.desc || '') + ' ' +
+          (it.dataset.actions || '') + ' ' +
+          (it.dataset.contacts || '')
+        ).toLowerCase();
+        it.style.display = (q === '' || hay.includes(q)) ? '' : 'none';
+      });
+    });
+  })();
+
+  // 전체 펼치기/접기
+  (function () {
+    const expandBtn = document.getElementById('btnExpandAll');
+    const collapseBtn = document.getElementById('btnCollapseAll');
+    const acc = document.getElementById('manualAccordion');
+    if (!acc) return;
+    function setAll(show) {
+      acc.querySelectorAll('.accordion-collapse').forEach(el => {
+        const inst = bootstrap.Collapse.getOrCreateInstance(el, { toggle:false });
+        show ? inst.show() : inst.hide();
+      });
+    }
+    expandBtn?.addEventListener('click', () => setAll(true));
+    collapseBtn?.addEventListener('click', () => setAll(false));
+  })();
+
+  // 섹션 수정 모달 채우기
+  const modalSectionEdit = document.getElementById('modalSectionEdit');
+  modalSectionEdit?.addEventListener('show.bs.modal', (ev) => {
+    const btn = ev.relatedTarget;
+    const secId = btn.getAttribute('data-sec-id');
+    const secTitle = btn.getAttribute('data-sec-title');
+    modalSectionEdit.querySelector('#secEditId').value = secId;
+    modalSectionEdit.querySelector('#secEditTitle').value = secTitle;
+    const form = document.getElementById('formSectionEdit');
+    form.action = `/admin/manual/section/${encodeURIComponent(secId)}/update`;
+  });
+
+  // 항목 추가 모달: 섹션 id 주입 + 프리뷰 초기화
+  const modalItemAdd = document.getElementById('modalItemAdd');
+  modalItemAdd?.addEventListener('show.bs.modal', (ev) => {
+    const btn = ev.relatedTarget;
+    const secId = btn.getAttribute('data-sec-id');
+    document.getElementById('itemAddSecId').value = secId;
+
+    document.getElementById('add_preview').innerHTML = '';
+    document.getElementById('add_target_dir').value = '';
+    document.getElementById('add_images_dir').value = '';
+  });
+
+  // 항목 수정 모달 채우기 + action 경로 설정 + 기존이미지 로딩
+  const modalItemEdit = document.getElementById('modalItemEdit');
+  modalItemEdit?.addEventListener('show.bs.modal', async (ev) => {
+    const b = ev.relatedTarget;
+    const secId = b.getAttribute('data-sec-id');
+    const itemId = b.getAttribute('data-item-id');
+    document.getElementById('itemEditSecId').value = secId;
+    document.getElementById('itemEditItemId').value = itemId;
+
+    document.getElementById('itemEditName').value = b.getAttribute('data-item-name') || '';
+    document.getElementById('itemEditImagesDir').value = b.getAttribute('data-item-images-dir') || '';
+    document.getElementById('itemEditDescription').value = b.getAttribute('data-item-description') || '';
+    document.getElementById('itemEditActions').value = b.getAttribute('data-item-actions') || '';
+    document.getElementById('itemEditContacts').value = b.getAttribute('data-item-contacts') || '';
+    document.getElementById('itemEditNotes').value = b.getAttribute('data-item-notes') || '';
+
+    const form = document.getElementById('formItemEdit');
+    form.action = `/admin/manual/item/${encodeURIComponent(secId)}/${encodeURIComponent(itemId)}/update`;
+
+    // 프리뷰/기존 목록 초기화
+    document.getElementById('edit_preview').innerHTML = '';
+    const curDir = (document.getElementById('itemEditImagesDir').value || '').replace(/^manual\//,'');
+    const tgt = document.getElementById('edit_target_dir');
+    if (tgt) tgt.value = curDir || '';
+
+    // 기존 이미지 목록 로딩
+    const loadDir = (document.getElementById('itemEditImagesDir').value || '').trim();
+    if (loadDir) {
+      await loadExistingImages(loadDir);
+    } else {
+      const box = document.getElementById('edit_existing_list');
+      if (box) box.innerHTML = '<div class="text-muted">이미지 폴더가 없습니다.</div>';
+    }
+  });
+
+  // ========== 업로드 공통 ==========
+
+  function renderThumbs(container, urls) {
+    const el = document.getElementById(container);
+    if (!el) return;
+    urls.forEach(u => {
+      const img = document.createElement('img');
+      img.src = u;
+      img.alt = 'preview';
+      img.style.maxWidth = '120px';
+      img.style.maxHeight = '90px';
+      img.style.objectFit = 'cover';
+      img.className = 'rounded border';
+      el.appendChild(img);
+    });
+  }
+
+  async function uploadImages({ filesInputId, targetDirInputId, outDirInputId, previewContainerId }) {
+    const filesInput = document.getElementById(filesInputId);
+    if (!filesInput?.files?.length) {
+      alert('업로드할 이미지를 선택하세요.');
+      return;
+    }
+    const targetDir = (document.getElementById(targetDirInputId)?.value || '').trim();
+
+    const fd = new FormData();
+    for (const f of filesInput.files) fd.append('files[]', f);
+    if (targetDir) fd.append('target_dir', targetDir);
+
+    try {
+      const res = await fetch('/admin/manuals/upload_images', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!data.ok) {
+        alert('업로드 실패: ' + (data.error || 'unknown'));
+        return;
+      }
+      const outDir = document.getElementById(outDirInputId);
+      if (outDir) outDir.value = data.dir;
+
+      renderThumbs(previewContainerId, data.files);
+
+      filesInput.value = '';
+      if (!targetDir) {
+        const tdi = document.getElementById(targetDirInputId);
+        if (tdi) tdi.value = data.dir.replace(/^manual\//, '');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('업로드 중 오류가 발생했습니다.');
+    }
+  }
+
+  document.getElementById('btnAddUpload')?.addEventListener('click', () => {
+    uploadImages({
+      filesInputId: 'add_files',
+      targetDirInputId: 'add_target_dir',
+      outDirInputId: 'add_images_dir',
+      previewContainerId: 'add_preview'
+    });
+  });
+
+  document.getElementById('btnEditUpload')?.addEventListener('click', () => {
+    const curDir = (document.getElementById('itemEditImagesDir')?.value || '').replace(/^manual\//, '');
+    const tgt = document.getElementById('edit_target_dir');
+    if (tgt && !tgt.value.trim() && curDir) tgt.value = curDir;
+
+    uploadImages({
+      filesInputId: 'edit_files',
+      targetDirInputId: 'edit_target_dir',
+      outDirInputId: 'itemEditImagesDir',
+      previewContainerId: 'edit_preview'
+    });
+  });
+
+  // ========== 기존 이미지 리스트/삭제 ==========
+  async function loadExistingImages(dir){
+    const qs = new URLSearchParams({ dir });
+    const res = await fetch(`/admin/manuals/list_images?${qs.toString()}`);
+    const data = await res.json();
+    if(!data.ok) return [];
+
+    const box = document.getElementById('edit_existing_list');
+    if(box){
+      box.innerHTML = '';
+      data.files.forEach(f=>{
+        const wrap = document.createElement('div');
+        wrap.className = 'd-flex flex-column align-items-center gap-1';
+
+        const img = document.createElement('img');
+        img.src = f.url; img.alt = f.name; img.className='thumb';
+
+        const btn = document.createElement('button');
+        btn.type='button';
+        btn.className='btn btn-outline-danger btn-sm';
+        btn.innerHTML = '<i class="bi bi-trash"></i>';
+        btn.onclick = async ()=>{
+          if(!confirm(`삭제할까요?\n${f.name}`)) return;
+          const body = { dir, name: f.name };
+          const r = await fetch('/admin/manuals/delete_image', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify(body)
+          });
+          const j = await r.json();
+          if(!j.ok){ alert('삭제 실패: '+(j.error||'unknown')); return; }
+          wrap.remove();
+        };
+
+        const cap = document.createElement('div');
+        cap.className='small text-muted text-truncate';
+        cap.style.maxWidth = '120px';
+        cap.textContent = f.name;
+
+        wrap.appendChild(img);
+        wrap.appendChild(btn);
+        wrap.appendChild(cap);
+        box.appendChild(wrap);
+      });
+
+      if(data.files.length === 0){
+        box.innerHTML = '<div class="text-muted">이미지가 없습니다.</div>';
+      }
+    }
+    return data.files;
+  }
+</script>
+
+{% endblock %}

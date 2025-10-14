@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>반납할 장비 선택</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <style>
+    body { background:#f8f9fa; }
+    .container { max-width: 680px; margin-top: 30px; }
+    .group-row { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px 18px; display:flex; align-items:center; justify-content:space-between; cursor:pointer; }
+    .group-row:hover { box-shadow:0 .25rem .75rem rgba(0,0,0,.06); }
+    .group-title { font-weight:700; }
+    .group-sub { color:#6c757d; margin-left:6px; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h3 class="mb-4 text-center">반납할 장비 선택</h3>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ 'danger' if category=='error' else category }} alert-dismissible fade show" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  {% if rented_items is defined and rented_items %}
+    <!-- 그룹 요약(총=고정 / 현재=변동) + 선택 배지 -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div
+        class="group-row w-100 me-3"
+        id="returnRow"
+        data-bs-toggle="modal"
+        data-bs-target="#returnModal"
+        data-total="{{ total_count }}"
+        data-current="{{ current_count }}"
+      >
+        <div class="d-flex align-items-baseline">
+          <span class="group-title">핸드무전기</span>
+          <span class="group-sub">
+            (총 개수: <span id="totalCountSpan">{{ total_count }}</span>개 /
+            현재 개수: <span id="currentCountSpan">{{ current_count }}</span>개)
+          </span>
+        </div>
+        <div class="form-check m-0">
+          <input class="form-check-input" type="checkbox" id="headerCheck" disabled>
+        </div>
+      </div>
+      <span class="badge text-bg-primary" id="selectedBadge">선택 0개</span>
+    </div>
+
+    <!-- 최종 제출(반납) -->
+    <form method="POST" action="/return_items" id="mainForm">
+      <div id="selectedContainer"></div>
+      <button type="submit" class="btn btn-success w-100" id="returnBtn" disabled>반납</button>
+    </form>
+
+    <!-- 모달: 대여중 장비 리스트 -->
+    <div class="modal fade" id="returnModal" tabindex="-1" aria-labelledby="returnModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="returnModalLabel">반납할 장비 선택</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+          </div>
+
+          <div class="modal-body">
+            <div class="d-flex align-items-center justify-content-between border rounded-3 px-3 py-2 mb-2">
+              <div class="text-muted small">전체 선택/해제</div>
+              <div class="form-check m-0">
+                <input class="form-check-input" type="checkbox" id="selectAll">
+              </div>
+            </div>
+
+            <div class="list-group">
+              {% for r in rented_items %}
+                {% set serial = r[0] %}
+                {% set item_name = r[1] %}
+                {% set model_name = r[2] %}
+                {% set unit_no = r[3] %}
+                <label class="list-group-item border rounded-3 mb-2">
+                  <input class="form-check-input me-2 item-check" type="checkbox" value="{{ serial }}">
+                  <span class="fw-bold">{{ item_name or '무전기' }}</span>
+                  <span> / {{ model_name or 'XiR-E8600' }}</span>
+                  <span> (대여번호: No.{{ unit_no }}) </span>
+                  <span class="text-muted">S/N: {{ serial }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">취소</button>
+            <!-- 확인: 선택만 저장, 실제 반납 아님 -->
+            <button type="button" class="btn btn-primary" id="confirmSelectionBtn" disabled>확인</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  {% else %}
+    <div class="alert alert-info text-center">현재 반납할 장비가 없습니다.</div>
+    <a href="/" class="btn btn-secondary w-100 mt-3">메인으로 돌아가기</a>
+  {% endif %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // 선택 저장용
+  const chosen = new Set();
+
+  // 상단 요소
+  const row              = document.getElementById('returnRow');
+  const totalCountSpan   = document.getElementById('totalCountSpan');
+  const currentCountSpan = document.getElementById('currentCountSpan');
+  const headerCheck      = document.getElementById('headerCheck');
+  const selectedBadge    = document.getElementById('selectedBadge');
+  const returnBtn        = document.getElementById('returnBtn');
+  const selectedHolder   = document.getElementById('selectedContainer');
+
+  // 고정/기준값 (서버값)
+  const TOTAL_FIXED  = row ? Number(row.getAttribute('data-total')) : 0;   // 총 개수(절대 변경 X)
+  const CURRENT_BASE = row ? Number(row.getAttribute('data-current')) : 0; // 초기 대여중 수
+
+  // 모달 요소
+  const returnModal  = document.getElementById('returnModal');
+  const selectAll    = document.getElementById('selectAll');
+  const confirmBtn   = document.getElementById('confirmSelectionBtn');
+
+  if (returnModal) {
+    // 모달 열릴 때: 기존 선택 반영
+    returnModal.addEventListener('show.bs.modal', () => {
+      document.querySelectorAll('.item-check').forEach(chk => {
+        chk.checked = chosen.has(chk.value);
+      });
+      refreshModalControls();
+    });
+
+    document.addEventListener('change', (e) => {
+      if (e.target.classList?.contains('item-check')) refreshModalControls();
+    });
+
+    selectAll?.addEventListener('change', () => {
+      const on = selectAll.checked;
+      document.querySelectorAll('.item-check').forEach(c => c.checked = on);
+      refreshModalControls();
+    });
+
+    function refreshModalControls() {
+      const all = Array.from(document.querySelectorAll('.item-check'));
+      const checked = all.filter(c => c.checked);
+      confirmBtn.disabled = checked.length === 0;
+      if (all.length > 0) {
+        selectAll.checked = checked.length === all.length;
+        selectAll.indeterminate = (checked.length > 0 && checked.length < all.length);
+      }
+    }
+
+    // 모달 '확인' → 선택 저장(반납 확정 아님)
+    confirmBtn.addEventListener('click', () => {
+      const all = Array.from(document.querySelectorAll('.item-check'));
+      const currentSelected = new Set(all.filter(c => c.checked).map(c => c.value));
+
+      // 모달에 보인 항목만 제거 후 다시 반영
+      all.forEach(c => chosen.delete(c.value));
+      currentSelected.forEach(v => chosen.add(v));
+
+      // hidden inputs 갱신 (serial_no로 전송)
+      syncHiddenInputs();
+
+      // 상단 표시 갱신
+      headerCheck.checked = chosen.size > 0;
+      selectedBadge.textContent = `선택 ${chosen.size}개`;
+
+      // 총 개수는 고정, 현재 개수만 (기준 - 선택수) 로 표시
+      const newCurrent = Math.max(CURRENT_BASE - chosen.size, 0);
+      totalCountSpan.textContent   = String(TOTAL_FIXED);
+      currentCountSpan.textContent = String(newCurrent);
+
+      // 반납 버튼 활성화
+      returnBtn.disabled = chosen.size === 0;
+
+      bootstrap.Modal.getInstance(returnModal).hide();
+    });
+  }
+
+  function syncHiddenInputs() {
+    selectedHolder.innerHTML = '';
+    chosen.forEach(v => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'items';   // 서버에서 request.form.getlist('items') (serial_no)로 받음
+      input.value = v;
+      selectedHolder.appendChild(input);
+    });
+  }
+</script>
+</body>
+</html>

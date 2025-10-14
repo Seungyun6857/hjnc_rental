@@ -1,0 +1,12 @@
+{% extends "base_admin.html" %}
+{% block content %}
+<h3>그룹 관리</h3>
+<ul class="list-group">
+  {% for group in groups %}
+  <li class="list-group-item d-flex justify-content-between align-items-center">
+    {{ group }}
+    <span class="badge bg-secondary">편집</span>
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}

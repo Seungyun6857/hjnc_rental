@@ -1,0 +1,23 @@
+{# templates/partials/footer.html #}
+{% set year = current_year|default(2025) %}
+
+<div class="footer-wrap">
+  <!-- 로고를 쓰고 싶으면 아래 <img> 한 줄 주석 해제 후 파일 경로만 바꾸세요 -->
+  {# <img src="{{ url_for('static', filename='img/logo-footer.png') }}" alt="회사 로고" height="20" class="me-2"> #}
+
+  <div class="footer-title fw-semibold text-dark">우주정보통신</div>
+  <div> 경남 창원시 진해구 신항로 433 1F · Tel. 051-220-2240</div>
+  <div>Copyright © {{ year }} 우주정보통신. All rights reserved.</div>
+  <div>※ 본 시스템은 내부 업무용입니다. 무단 접근을 금합니다.</div>
+</div>
+
+<style>
+  /* partial 내부에 최소 스타일만 둡니다(다른 화면에 영향 거의 없음) */
+  .footer-wrap{
+    line-height: 1.25;
+  }
+  .footer-title{
+    font-size: .95rem;
+    margin-bottom: .15rem;
+  }
+</style>

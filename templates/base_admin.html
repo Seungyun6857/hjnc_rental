@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>{% block title %}관리자{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Bootstrap / Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+  <style>
+    :root{
+      --sidebar-bg:#2b2f36;
+      --sidebar-bg-2:#252932;
+      --sidebar-txt:#e8eaed;
+      --sidebar-muted:#a9b1bb;
+
+      --footer-bg:#eef2f6;
+      --footer-height:80px; /* admin_menu에서만 쓰임 */
+    }
+
+    html, body { height:100%; }
+    /* 전체 문서에는 스크롤 금지, 본문 영역만 스크롤 */
+    body{ overflow:hidden; background:#f6f7fb; }
+
+    /* ====== 그리드 레이아웃 (사이드바 + 본문 [+ 푸터]) ====== */
+    .layout{
+      height:100vh;
+      display:grid;
+      grid-template-columns:260px 1fr;
+      grid-template-rows: 1fr;      /* 기본: 푸터 없음 */
+    }
+    /* admin_menu.html 에서만 푸터 행 추가 */
+    .layout.has-footer{
+      grid-template-rows: 1fr var(--footer-height);
+    }
+
+    /* ====== Sidebar ====== */
+    .sidebar{
+      grid-column:1/2; grid-row:1/2;         /* 기본: 1행만 */
+      background:var(--sidebar-bg);
+      color:var(--sidebar-txt);
+      display:flex; flex-direction:column;
+      border-right:1px solid rgba(255,255,255,.08);
+      min-height:0;
+    }
+    /* 푸터가 있을 때는 1~2행 차지 */
+    .layout.has-footer .sidebar{ grid-row:1/3; }
+
+    .sb-header{
+      padding:16px 18px;
+      display:flex; align-items:center; justify-content:space-between;
+      border-bottom:1px solid rgba(255,255,255,.08);
+    }
+    .brand{ font-weight:800; letter-spacing:.5px; display:flex; align-items:center; gap:8px; color:var(--sidebar-txt); text-decoration:none; }
+    .brand:hover{ opacity:.9; color:var(--sidebar-txt); }
+    .brand .emoji{font-size:22px}
+    .quick-icons .btn{color:var(--sidebar-muted); border:none;}
+
+    .sb-section-title{ color:var(--sidebar-muted); font-size:12px; text-transform:uppercase; padding:10px 18px 6px; display:flex; align-items:center; gap:6px; }
+    .sb-link, .sb-collapse-toggle{
+      color:var(--sidebar-txt); text-decoration:none;
+      padding:10px 18px; display:flex; align-items:center; gap:10px;
+      transition:background .15s ease;
+    }
+    .sb-link:hover, .sb-collapse-toggle:hover{background:var(--sidebar-bg-2);}
+    .sb-link.active{background:#1e293b; color:#fff;}
+    .sb-icon{width:18px; text-align:center; color:var(--sidebar-muted);}
+    .sb-chevron{margin-left:auto; color:var(--sidebar-muted); transition:transform .2s;}
+    .sb-collapse-toggle.collapsed .sb-chevron{ transform:rotate(0); }
+    .sb-collapse-toggle:not(.collapsed) .sb-chevron{ transform:rotate(180deg); }
+    .sb-sub{background:rgba(255,255,255,.02);}
+    .sb-sub .sb-link{padding-left:42px;}
+    .sb-sub .sb-link .bi-dot{color:var(--sidebar-muted);}
+
+    .sb-footer{
+      margin-top:auto; padding:10px 12px; border-top:1px solid rgba(255,255,255,.08);
+      display:flex; align-items:center; gap:8px; justify-content:space-between;
+    }
+    .lang-select .btn{color:var(--sidebar-txt); border-color:rgba(255,255,255,.2)}
+
+    /* ====== 본문 ====== */
+    .content{
+      grid-column:2/3; grid-row:1/2;
+      background:#f6f7fb;
+      padding:20px;
+      overflow:auto;     /* 본문만 스크롤 */
+      min-height:0;      /* grid 자식 스크롤을 위해 필수 */
+    }
+
+    /* ====== 푸터 (admin_menu에서만 렌더) ====== */
+    .site-footer{
+      grid-column:2/3; grid-row:2/3;
+      background:var(--footer-bg);
+      border-top:1px solid #dbe3ea;
+      height:var(--footer-height);
+      display:flex; align-items:center;
+    }
+    .site-footer .container{ padding:6px 12px; }
+    .site-footer .container > *{ margin:0; line-height:1.25; }
+
+    /* 작은 화면에서 사이드바 살짝 좁힘 옵션 */
+    @media (max-width:1200px){
+      .layout{ grid-template-columns:240px 1fr; }
+    }
+    @media (max-width:992px){
+      .layout{ grid-template-columns:220px 1fr; }
+    }
+  </style>
+</head>
+<body>
+<!-- admin_menu.html 에서만 has-footer 클래스를 주기 위해 block 제공 -->
+<div class="layout {% block layout_extra_class %}{% endblock %}">
+
+  <!-- ================= Sidebar ================= -->
+  <aside class="sidebar">
+    <div class="sb-header">
+      <a class="brand" href="{{ url_for('admin_menu') }}" aria-label="메인으로 이동">
+        <span class="emoji">🌌</span>
+        <span>Wooju Admin</span>
+      </a>
+      <div class="quick-icons d-flex align-items-center gap-1">
+        <button class="btn position-relative" data-bs-toggle="modal" data-bs-target="#notifModal" title="알림">
+          <i class="bi bi-bell"></i>
+          <span class="position-absolute top-0 end-0 translate-middle p-1 bg-danger border border-light rounded-circle d-none" id="notifyDot"></span>
+        </button>
+        <button class="btn" data-bs-toggle="modal" data-bs-target="#settingsModal" title="설정">
+          <i class="bi bi-gear"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="sb-section-title"><i class="bi bi-diagram-3"></i>사이트 관리</div>
+
+    <!-- 대시보드 -->
+    <a class="sb-link {% if request.endpoint == 'admin_menu' %}active{% endif %}" href="{{ url_for('admin_menu') }}">
+      <i class="sb-icon bi bi-house"></i>대시보드
+    </a>
+
+    <!-- 장비 관리 -->
+    <a class="sb-link {% if request.endpoint == 'admin_equipment' %}active{% endif %}" href="{{ url_for('admin_equipment') }}">
+      <i class="sb-icon bi bi-hdd-stack"></i>장비 관리
+    </a>
+
+    <!-- 대여/반납 관리 -->
+    {% set active_rental = request.endpoint in ['admin_rent_status', 'admin_return_status'] %}
+    <a class="sb-collapse-toggle {{ '' if active_rental else 'collapsed' }}"
+       data-bs-toggle="collapse" href="#sbRental" role="button"
+       aria-expanded="{{ 'true' if active_rental else 'false' }}">
+      <i class="sb-icon bi bi-box-seam"></i>대여/반납 관리
+      <i class="sb-chevron bi bi-chevron-down"></i>
+    </a>
+    <div class="collapse sb-sub {{ 'show' if active_rental else '' }}" id="sbRental">
+      <a class="sb-link {{ 'active' if request.endpoint == 'admin_rent_status' else '' }}"
+         href="{{ url_for('admin_rent_status') }}">
+        <i class="sb-icon bi bi-dot"></i>대여 현황
+      </a>
+      <a class="sb-link {{ 'active' if request.endpoint == 'admin_return_status' else '' }}"
+         href="{{ url_for('admin_return_status') }}">
+        <i class="sb-icon bi bi-dot"></i>반납 현황
+      </a>
+    </div>
+
+    <!-- 게시판 -->
+    {% set active_board = request.path.startswith('/admin/board') %}
+    {% set is_board_type = request.endpoint == 'admin_board_type' %}
+    {% set board_type = (request.view_args.get('board_type') if request.view_args else None) %}
+
+    <a class="sb-collapse-toggle {{ '' if active_board else 'collapsed' }}"
+       data-bs-toggle="collapse" href="#sbBoard" role="button"
+       aria-expanded="{{ 'true' if active_board else 'false' }}">
+      <i class="sb-icon bi bi-megaphone"></i>게시판
+      <i class="sb-chevron bi bi-chevron-down"></i>
+    </a>
+    <div class="collapse sb-sub {{ 'show' if active_board else '' }}" id="sbBoard">
+      <a class="sb-link
+                {% if (is_board_type and board_type=='all') or request.endpoint=='admin_board' %}active{% endif %}"
+         {% if has_endpoint('admin_board_type') %}
+           href="{{ url_for('admin_board_type', board_type='all') }}"
+         {% elif has_endpoint('admin_board') %}
+           href="{{ url_for('admin_board') }}"
+         {% else %} href="#"
+         {% endif %}>
+        <i class="sb-icon bi bi-dot"></i>전체 게시판
+      </a>
+
+      <a class="sb-link {% if is_board_type and board_type=='work' %}active{% endif %}"
+         {% if has_endpoint('admin_board_type') %}
+           href="{{ url_for('admin_board_type', board_type='work') }}"
+         {% elif has_endpoint('admin_board') %}
+           href="{{ url_for('admin_board') }}"
+         {% else %} href="#"
+         {% endif %}>
+        <i class="sb-icon bi bi-dot"></i>업무 게시판
+      </a>
+
+      <a class="sb-link {% if is_board_type and board_type=='general' %}active{% endif %}"
+         {% if has_endpoint('admin_board_type') %}
+           href="{{ url_for('admin_board_type', board_type='general') }}"
+         {% elif has_endpoint('admin_board') %}
+           href="{{ url_for('admin_board') }}"
+         {% else %} href="#"
+         {% endif %}>
+        <i class="sb-icon bi bi-dot"></i>일반 게시판
+      </a>
+
+      <a class="sb-link {% if is_board_type and board_type=='data' %}active{% endif %}"
+         {% if has_endpoint('admin_board_type') %}
+           href="{{ url_for('admin_board_type', board_type='data') }}"
+         {% elif has_endpoint('admin_board') %}
+           href="{{ url_for('admin_board') }}"
+         {% else %} href="#"
+         {% endif %}>
+        <i class="sb-icon bi bi-dot"></i>자료실
+      </a>
+
+      <a class="sb-link {% if is_board_type and board_type=='qna' %}active{% endif %}"
+         {% if has_endpoint('admin_board_type') %}
+           href="{{ url_for('admin_board_type', board_type='qna') }}"
+         {% elif has_endpoint('admin_board') %}
+           href="{{ url_for('admin_board') }}"
+         {% else %} href="#"
+         {% endif %}>
+        <i class="sb-icon bi bi-dot"></i>Q&A
+      </a>
+    </div>
+
+    <!-- 주소록 -->
+    <a class="sb-link {% if request.endpoint == 'admin_contacts' %}active{% endif %}" href="{{ url_for('admin_contacts') }}">
+      <i class="sb-icon bi bi-people"></i>주소록
+    </a>
+
+    <!-- ===== 사용자 관리 ===== -->
+    {% set active_users = request.path.startswith('/admin/users') %}
+    <a class="sb-collapse-toggle {{ '' if active_users else 'collapsed' }}"
+       data-bs-toggle="collapse" href="#sbUsers" role="button"
+       aria-expanded="{{ 'true' if active_users else 'false' }}">
+      <i class="sb-icon bi bi-person-gear"></i>사용자 관리
+      <i class="sb-chevron bi bi-chevron-down"></i>
+    </a>
+    <div class="collapse sb-sub {{ 'show' if active_users else '' }}" id="sbUsers">
+      <a class="sb-link {{ 'active' if request.endpoint == 'admin_user_list' else '' }}"
+         href="{{ url_for('admin_user_list') }}"><i class="sb-icon bi bi-dot"></i>사원 리스트</a>
+      <a class="sb-link {{ 'active' if request.endpoint == 'admin_user_add' else '' }}"
+         href="{{ url_for('admin_user_add') }}"><i class="sb-icon bi bi-dot"></i>사원 추가</a>
+      <a class="sb-link {{ 'active' if request.endpoint == 'admin_rank_dept_list' else '' }}"
+         href="{{ url_for('admin_rank_dept_list') }}"><i class="sb-icon bi bi-dot"></i>직급 및 부서 리스트</a>
+    </div>
+
+    <!-- ===== 인프라 모니터링 (수정 완료) ===== -->
+    {% set role = (session.get('role') or session.get('user_role') or 'viewer') %}
+    {% set infra_open = request.path.startswith('/admin/infra')
+                        or request.path.startswith('/admin/network')
+                        or request.path.startswith('/admin/cctv')
+                        or request.path.startswith('/admin/servers')
+                        or (request.endpoint and request.endpoint in [
+                             'netmon_status','netmon_groups','netmon_reports',
+                             'netmon_alerts','netmon_import'
+                           ]) %}
+    <a class="sb-collapse-toggle {{ '' if infra_open else 'collapsed' }}"
+       data-bs-toggle="collapse" href="#sbNetmon" role="button"
+       aria-expanded="{{ 'true' if infra_open else 'false' }}">
+      <i class="sb-icon bi bi-diagram-3"></i>인프라 모니터링
+      <i class="sb-chevron bi bi-chevron-down"></i>
+    </a>
+    <div class="collapse sb-sub {{ 'show' if infra_open else '' }}" id="sbNetmon">
+      <a class="sb-link {{ 'active' if request.endpoint == 'netmon_status' else '' }}"
+         {% if has_endpoint('netmon_status') %}
+           href="{{ url_for('netmon_status') }}"
+         {% else %} href="#"
+         {% endif %}>
+         <i class="sb-icon bi bi-activity"></i>네트워크 상태
+      </a>
+
+      <a class="sb-link {{ 'active' if request.endpoint == 'netmon_groups' else '' }}"
+         {% if has_endpoint('netmon_groups') %}
+           href="{{ url_for('netmon_groups') }}"
+         {% else %} href="#"
+         {% endif %}>
+         <i class="sb-icon bi bi-collection"></i>장비 그룹
+      </a>
+
+      <a class="sb-link {{ 'active' if request.endpoint == 'netmon_reports' else '' }}"
+         {% if has_endpoint('netmon_reports') %}
+           href="{{ url_for('netmon_reports') }}"
+         {% else %} href="#"
+         {% endif %}>
+         <i class="sb-icon bi bi-graph-up"></i>리포트
+      </a>
+
+      <a class="sb-link {{ 'active' if request.endpoint == 'netmon_alerts' else '' }}"
+         {% if role == 'admin' and has_endpoint('netmon_alerts') %}
+           href="{{ url_for('netmon_alerts') }}"
+         {% else %} href="#"
+         {% endif %}>
+         <i class="sb-icon bi bi-bell"></i>알림 설정
+      </a>
+
+      <a class="sb-link {{ 'active' if request.endpoint == 'netmon_import' else '' }}"
+         {% if role == 'admin' and has_endpoint('netmon_import') %}
+           href="{{ url_for('netmon_import') }}"
+         {% else %} href="#"
+         {% endif %}>
+         <i class="sb-icon bi bi-file-earmark-arrow-up"></i>장비 가져오기(Excel)
+      </a>
+    </div>
+    <!-- ===== /인프라 모니터링 ===== -->
+
+    <div class="sb-section-title"><i class="bi bi-wrench-adjustable"></i>업무 도구</div>
+    <a class="sb-link {% if request.endpoint == 'calendar' %}active{% endif %}" href="{{ url_for('calendar') }}"><i class="sb-icon bi bi-calendar-event"></i>캘린더</a>
+    <a class="sb-link {% if request.endpoint == 'admin_manual' %}active{% endif %}" href="{{ url_for('admin_manual') }}"><i class="sb-icon bi bi-book"></i>업무 메뉴얼</a>
+    <a class="sb-link" href="https://outlook.office.com/mail/" target="_blank" rel="noopener"><i class="sb-icon bi bi-envelope-open"></i>웹메일 열기</a>
+    <a class="sb-link" href="#" data-bs-toggle="modal" data-bs-target="#composeMailModal"><i class="bi bi-envelope"></i>빠른 메일쓰기</a>
+
+    <div class="sb-footer">
+      <div class="dropup lang-select">
+        <button class="btn btn-sm dropdown-toggle" data-bs-toggle="dropdown" id="btnLang">
+          <i class="bi bi-translate me-1"></i><span id="langText">한국어</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-dark">
+          <li><a class="dropdown-item lang-item" data-lang="ko">한국어</a></li>
+          <li><a class="dropdown-item lang-item" data-lang="en">English</a></li>
+          <li><a class="dropdown-item lang-item" data-lang="ja">日本語</a></li>
+        </ul>
+      </div>
+      <a href="{{ url_for('admin_logout') }}" class="text-decoration-none text-light small"><i class="bi bi-box-arrow-right me-1"></i>로그아웃</a>
+    </div>
+  </aside>
+
+  <!-- ================= Content ================= -->
+  <main class="content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- ================= Footer(블록) ================= -->
+  {% block footer %}{% endblock %}
+</div>
+
+<!-- ============ 알림 모달 ============ -->
+<div class="modal fade" id="notifModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-sm">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><i class="bi bi-bell me-2"></i>알림</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body p-0"><ul class="list-group list-group-flush" id="notifList"></ul></div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary btn-sm" id="btnClearNotif">모두 읽음</button>
+        <button class="btn btn-primary btn-sm" data-bs-dismiss="modal">닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 설정 모달 ============ -->
+<div class="modal fade" id="settingsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form class="modal-content" id="settingsForm">
+      <div class="modal-header"><h5 class="modal-title"><i class="bi bi-gear me-2"></i>설정</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="optSidebarCompact"><label class="form-check-label" for="optSidebarCompact">사이드바 컴팩트 모드</label></div>
+        <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="optNotifySound"><label class="form-check-label" for="optNotifySound">알림 도착음</label></div>
+        <div class="mb-2">
+          <label class="form-label">기본 언어</label>
+          <select class="form-select" id="optDefaultLang">
+            <option value="ko">한국어</option><option value="en">English</option><option value="ja">日本語</option>
+          </select>
+        </div>
+        <div class="text-muted small">설정은 이 브라우저에 저장됩니다.</div>
+      </div>
+      <div class="modal-footer"><button class="btn btn-primary">저장</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ 빠른 메일쓰기 모달 ============ -->
+<div class="modal fade" id="composeMailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><i class="bi bi-envelope me-2"></i>빠른 메일쓰기</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <form onsubmit="return sendQuickMail()">
+          <div class="row g-3">
+            <div class="col-md-8"><label class="form-label">받는사람(쉼표 구분)</label><input class="form-control" id="mailTo" placeholder="user@domain.com, user2@domain.com" required></div>
+            <div class="col-md-4"><label class="form-label">CC</label><input class="form-control" id="mailCc" placeholder="cc@domain.com"></div>
+            <div class="col-12"><label class="form-label">제목</label><input class="form-control" id="mailSubject" required></div>
+            <div class="col-12">
+              <label class="form-label">내용</label>
+              <textarea class="form-control" id="mailBody" rows="7"></textarea>
+              <div class="form-text">* mailto 방식(첨부 불가). 첨부 필요시 웹메일을 이용하세요.</div>
+            </div>
+          </div>
+          <button type="submit" class="d-none"></button>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <a id="mailtoAnchor" class="btn btn-primary"><i class="bi bi-send"></i> 메일앱으로 보내기</a>
+        <button class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Script -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- 페이지 공통 유틸 스크립트 -->
+<script>
+  // -------- 언어 UI --------
+  const langMap = { ko:'한국어', en:'English', ja:'日本語' };
+  const savedLang = localStorage.getItem('admin.lang') || 'ko';
+  document.getElementById('langText').textContent = langMap[savedLang] || '한국어';
+  document.querySelectorAll('.lang-item').forEach(a=>{
+    a.addEventListener('click', ()=>{
+      const code = a.dataset.lang;
+      localStorage.setItem('admin.lang', code);
+      document.getElementById('langText').textContent = langMap[code] || '한국어';
+    });
+  });
+
+  // -------- 알림(데모) --------
+  const notifList = document.getElementById('notifList');
+  const notifyDot = document.getElementById('notifyDot');
+  if(!localStorage.getItem('admin.notif')){
+    localStorage.setItem('admin.notif', JSON.stringify([
+      {msg:'새 공지사항이 등록되었습니다.', time:'방금'},
+      {msg:'반납 예정 장비가 있습니다.', time:'1시간 전'}
+    ]));
+  }
+  function renderNotif(){
+    const arr = JSON.parse(localStorage.getItem('admin.notif') || '[]');
+    notifList.innerHTML = arr.length
+      ? arr.map(n=>`<li class="list-group-item small d-flex justify-content-between"><span>${n.msg}</span><span class="text-muted">${n.time}</span></li>`).join('')
+      : '<li class="list-group-item text-muted small text-center py-3">알림이 없습니다.</li>';
+    notifyDot.classList.toggle('d-none', arr.length===0);
+  }
+  renderNotif();
+  document.getElementById('btnClearNotif').addEventListener('click', ()=>{
+    localStorage.setItem('admin.notif','[]'); renderNotif();
+  });
+
+  // -------- 설정 저장 + 초기 반영 --------
+  const cfg = JSON.parse(localStorage.getItem('admin.settings')||'{}');
+  document.getElementById('optSidebarCompact').checked = !!cfg.compact;
+  document.getElementById('optNotifySound').checked = !!cfg.nsound;
+  document.getElementById('optDefaultLang').value = savedLang;
+  // 초기 로드시 컴팩트 적용
+  if (cfg.compact) {
+    document.querySelector('.layout').style.gridTemplateColumns = '220px 1fr';
+  }
+
+  document.getElementById('settingsForm').addEventListener('submit', (e)=>{
+    e.preventDefault();
+    const compact = document.getElementById('optSidebarCompact').checked;
+    const nsound  = document.getElementById('optNotifySound').checked;
+    const lang    = document.getElementById('optDefaultLang').value;
+    localStorage.setItem('admin.settings', JSON.stringify({compact, nsound, lang}));
+    localStorage.setItem('admin.lang', lang);
+    document.getElementById('langText').textContent = langMap[lang] || '한국어';
+    document.querySelector('.layout').style.gridTemplateColumns = compact?'220px 1fr':'260px 1fr';
+    if (window.bootstrap?.Modal) {
+      bootstrap.Modal.getInstance(document.getElementById('settingsModal')).hide();
+    }
+  });
+
+  // -------- 빠른 메일쓰기(mailto) --------
+  function buildMailtoURL(to, cc, subject, body){
+    const p = new URLSearchParams();
+    if(cc)      p.set('cc', cc);
+    if(subject) p.set('subject', subject);
+    if(body)    p.set('body', body);
+    return `mailto:${encodeURIComponent(to)}?${p.toString()}`;
+  }
+  function updateMailto(){
+    const to = document.getElementById('mailTo').value.trim();
+    const cc = document.getElementById('mailCc').value.trim();
+    const theSubject = document.getElementById('mailSubject').value.trim();
+    const theBody    = document.getElementById('mailBody').value;
+    const a = document.getElementById('mailtoAnchor');
+    if(!to){ a.removeAttribute('href'); a.classList.add('disabled'); return; }
+    a.classList.remove('disabled');
+    a.href = buildMailtoURL(to, cc, theSubject, theBody);
+    a.target = '_blank'; a.rel='noopener';
+  }
+  function sendQuickMail(){ updateMailto(); document.getElementById('mailtoAnchor').click(); return false; }
+  ['mailTo','mailCc','mailSubject','mailBody'].forEach(id=>{
+    const el = document.getElementById(id); if(el) el.addEventListener('input', updateMailto);
+  });
+  window.sendQuickMail = sendQuickMail;
+</script>
+
+<!-- ✅ 페이지 전용 스크립트(외부): admin_rent_status 등에서 사용 -->
+<script defer src="{{ url_for('static', filename='js/admin_rent_status.js') }}"></script>
+
+<!-- 페이지가 추가로 주입할 스크립트 블록 -->
+{% block scripts %}{% endblock %}
+{% block extra_js %}{% endblock %}
+</body>
+</html>

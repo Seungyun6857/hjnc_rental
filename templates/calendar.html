@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>캘린더</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Bootstrap / FullCalendar -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css" rel="stylesheet" />
+
+  <style>
+    html, body { margin:0; padding:0; font-family:'Pretendard',sans-serif; background:#fff; }
+    #calendar { max-width:100%; height:450px; margin:0 auto; }
+    .fc-daygrid-day:hover { background:#f1f3f5; cursor:pointer; }
+    .fc-day-today { background:#ffeaa7 !important; }
+    .fc-toolbar { display:none !important; }
+
+    /* ✅ 날짜 숫자는 보이게 유지 (이전의 .fc-daygrid-day-top {display:none} 제거) */
+    .fc .fc-highlight { background:none !important; }
+    .fc-daygrid-day-frame:focus { outline:none !important; }
+  </style>
+</head>
+<body>
+  <div id="calendar"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const calendarEl = document.getElementById('calendar');
+      const PARENT_ORIGIN = window.location.origin;
+
+      const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        initialDate: new Date(),
+        locale: 'ko',
+        headerToolbar: false,
+        height: 450,
+        selectable: false,
+        editable: true,
+
+        // 제목만 보이게(시간 텍스트 숨김)
+        displayEventTime: false,
+
+        // 서버에서 일정 로드(가능하면 start/end는 YYYY-MM-DD로 내려주세요)
+        events: '/get_schedules',
+
+        dateClick(info) {
+          window.parent.postMessage({ type:'openScheduleModal', start: info.dateStr }, PARENT_ORIGIN);
+        },
+
+        eventClick(info) {
+          window.parent.postMessage({
+            type: 'editScheduleModal',
+            id: info.event.id,
+            title: info.event.title,
+            start: info.event.startStr,
+            end: info.event.endStr,
+            note: info.event.extendedProps?.note || ''
+          }, PARENT_ORIGIN);
+        },
+
+        datesSet() {
+          const d = calendar.getDate();
+          window.parent.postMessage({
+            type:'updateCurrentDate',
+            dateText:`${d.getFullYear()}년 ${d.getMonth()+1}월`
+          }, PARENT_ORIGIN);
+        }
+      });
+
+      calendar.render();
+      window.calendar = calendar;
+
+      // 부모 창 메시지 수신
+      window.addEventListener('message', async (event) => {
+        if (event.origin !== PARENT_ORIGIN) return;
+        const data = event.data || {};
+
+        // 네비게이션
+        if (data.type === 'calendarNav') {
+          if (data.command === 'today') calendar.today();
+          else if (data.command === 'prev') calendar.prev();
+          else if (data.command === 'next') calendar.next();
+
+          const d = calendar.getDate();
+          window.parent.postMessage({ type:'updateCurrentDate', dateText:`${d.getFullYear()}년 ${d.getMonth()+1}월` }, PARENT_ORIGIN);
+          return;
+        }
+
+        // 추가/수정: 모두 막대 표시(allDay), 날짜만 사용
+        if (data.type === 'addEvent') {
+          try {
+            const toDateOnly = v => (v || '').slice(0,10);
+            const payload = {
+              title: (data.title || '').trim() || '제목 없음',
+              start: toDateOnly(data.start),
+              end:   toDateOnly(data.end),
+              note:  data.note ?? ''
+            };
+
+            if (data.id) {
+              // 수정
+              const res = await fetch('/update_schedule', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: data.id, ...payload })
+              });
+              const raw = await res.text();
+              if (!res.ok) { console.error('update_schedule error:', res.status, raw); throw new Error('update failed'); }
+
+              const ev = calendar.getEventById(data.id);
+              if (ev) {
+                ev.setProp('title', payload.title);
+                ev.setStart(payload.start);
+                ev.setEnd(payload.end);
+                ev.setAllDay(true);
+                ev.setExtendedProp('note', payload.note);
+              } else {
+                calendar.addEvent({
+                  id: String(data.id),
+                  title: payload.title,
+                  start: payload.start,
+                  end: payload.end,
+                  allDay: true,
+                  extendedProps: { note: payload.note }
+                });
+              }
+            } else {
+              // 신규
+              const res = await fetch('/add_schedule', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+              });
+              const raw = await res.text();
+              if (!res.ok) { console.error('add_schedule error:', res.status, raw); throw new Error('add failed'); }
+              let json; try { json = JSON.parse(raw); } catch(e) { console.error('Invalid JSON:', raw); throw e; }
+              if (!json || typeof json.id === 'undefined') { console.error('No id in response', json); throw new Error('no id'); }
+
+              calendar.addEvent({
+                id: String(json.id),
+                title: payload.title,
+                start: payload.start,
+                end: payload.end,
+                allDay: true,
+                extendedProps: { note: payload.note }
+              });
+            }
+          } catch (err) {
+            console.error(err);
+            alert('일정 저장에 실패했습니다. (콘솔 확인)');
+          }
+          return;
+        }
+
+        // 삭제
+        if (data.type === 'deleteEvent') {
+          try {
+            const res = await fetch('/delete_schedule', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: data.id })
+            });
+            const raw = await res.text();
+            if (!res.ok) { console.error('delete_schedule error:', res.status, raw); throw new Error('delete failed'); }
+            const ev = calendar.getEventById(data.id);
+            if (ev) ev.remove();
+          } catch (err) {
+            console.error(err);
+            alert('일정 삭제에 실패했습니다.');
+          }
+          return;
+        }
+      });
+    });
+  </script>
+</body>
+</html>

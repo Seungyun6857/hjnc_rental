@@ -1,0 +1,349 @@
+{% extends "base_admin.html" %}
+{% block title %}게시판{% endblock %}
+{% block content %}
+
+{# ==== 기본 파라미터 ==== #}
+{% set board_type = board_type or request.view_args.get('board_type', 'general') %}
+{% set board_name_map = {'work':'업무게시판','general':'일반게시판','data':'자료실','qna':'Q&A'} %}
+{% set board_kor = board_name_map.get(board_type, '일반게시판') %}
+{% set cur_cat = category or '' %}
+
+<!-- 상단 헤더 -->
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <div class="d-flex align-items-center gap-2">
+    <i class="bi bi-megaphone-fill text-primary fs-4"></i>
+    <h3 class="m-0">{{ board_kor }}</h3>
+    <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis ms-1">총 {{ total }}건</span>
+  </div>
+
+  <!-- 빠른 필터(카테고리) -->
+  <div class="btn-group btn-group-sm" role="group" aria-label="빠른 필터">
+    {% for val, label in [('', '전체'), ('공지','공지'), ('안내','안내'), ('점검','점검')] %}
+      <a class="btn {{ 'btn-primary' if cur_cat==val else 'btn-outline-primary' }}"
+         href="{{ url_for('admin_board_type', board_type=board_type, page=1, per_page=per_page, q=q, category=val) }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- 등록 카드 -->
+<div class="card mb-4 shadow-sm">
+  <div class="card-body">
+    <form action="{{ url_for('add_board_post') }}" method="post">
+      <input type="hidden" name="board_type" value="{{ board_type }}">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-7">
+          <label class="form-label">제목</label>
+          <input name="title" class="form-control" placeholder="제목을 입력하세요" required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">카테고리</label>
+          <select name="category" class="form-select">
+            <option value="공지">공지</option>
+            <option value="안내" selected>안내</option>
+            <option value="점검">점검</option>
+            <option value="기타">기타</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <div class="form-check mt-4">
+            <input class="form-check-input" type="checkbox" id="is_pinned" name="is_pinned">
+            <label class="form-check-label" for="is_pinned">상단 고정</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-3">
+        <label class="form-label">내용</label>
+        <textarea name="content" rows="6" class="form-control" placeholder="내용을 입력하세요"></textarea>
+        <div class="form-text">등록 후 언제든 수정 가능합니다.</div>
+      </div>
+
+      <div class="mt-3 d-flex justify-content-end gap-2">
+        <button type="reset" class="btn btn-outline-secondary">초기화</button>
+        <button class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>등록</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 목록 카드 -->
+<div class="card shadow-sm">
+  <div class="card-header bg-white position-sticky top-0" style="z-index:3;">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <strong>목록</strong>
+      <div class="d-flex align-items-center gap-2 ms-auto">
+        <button form="bulkDeleteForm" id="bulkDeleteBtn" class="btn btn-outline-danger btn-sm" disabled
+                onclick="return confirm('선택한 항목을 삭제할까요?');">
+          <i class="bi bi-trash3"></i> 선택 삭제
+        </button>
+
+        <form class="d-flex align-items-center gap-2" method="get"
+              action="{{ url_for('admin_board_type', board_type=board_type) }}">
+          <input type="hidden" name="board_type" value="{{ board_type }}">
+          <select name="category" class="form-select form-select-sm" style="width:120px">
+            {% for c in categories %}
+              <option value="{{ c }}" {{ 'selected' if c==category else '' }}>{{ c if c else '전체' }}</option>
+            {% endfor %}
+          </select>
+
+          <select name="per_page" class="form-select form-select-sm" style="width:100px" onchange="this.form.submit()">
+            <option value="10" {{ 'selected' if per_page==10 else '' }}>10개</option>
+            <option value="20" {{ 'selected' if per_page==20 else '' }}>20개</option>
+            <option value="50" {{ 'selected' if per_page==50 else '' }}>50개</option>
+          </select>
+
+          <div class="input-group input-group-sm" style="width:260px">
+            <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="검색어(제목+내용)">
+            <button class="btn btn-outline-primary"><i class="bi bi-search"></i></button>
+          </div>
+          <input type="hidden" name="page" value="1">
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <form id="bulkDeleteForm" action="{{ url_for('bulk_delete_board') }}" method="post">
+    <input type="hidden" name="q" value="{{ q }}">
+    <input type="hidden" name="category" value="{{ category }}">
+    <input type="hidden" name="page" value="{{ page }}">
+    <input type="hidden" name="per_page" value="{{ per_page }}">
+    <input type="hidden" name="board_type" value="{{ board_type }}">
+
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light sticky-top" style="top:56px; z-index:2;">
+          <tr>
+            <th style="width:56px" class="text-center">
+              <input type="checkbox" id="checkAll">
+            </th>
+            <th>제목 / 내용</th>
+            <th style="width:120px">구분</th>
+            <th style="width:170px">작성일</th>
+            <th style="width:200px" class="text-end">관리</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% if posts %}
+          {% for p in posts %}
+          <tr class="row-hover">
+            <td class="text-center">
+              <input type="checkbox" class="row-check" name="ids" value="{{ p.id }}">
+            </td>
+            <td class="text-break">
+              {% if p.is_pinned %}<span class="me-1" title="상단 고정">📌</span>{% endif %}
+              <a href="#" class="fw-semibold link-body-emphasis text-decoration-none post-link" data-id="{{ p.id }}">{{ p.title }}</a>
+              {% if p.content %}
+                <div class="small text-muted text-truncate-2 mt-1">{{ p.content }}</div>
+              {% endif %}
+            </td>
+            <td>
+              <span class="badge
+                {% if p.category == '공지' %} bg-warning text-dark
+                {% elif p.category == '안내' %} bg-info text-dark
+                {% elif p.category == '점검' %} bg-danger
+                {% else %} bg-secondary {% endif %}">
+                {{ p.category or '기타' }}
+              </span>
+            </td>
+            <td class="text-muted small">{{ p.created_at[:16] }}</td>
+            <td class="text-end">
+              <form action="{{ url_for('toggle_pin', post_id=p.id, board_type=board_type) }}" method="post" class="d-inline">
+                <button class="btn btn-outline-secondary btn-sm">
+                  {% if p.is_pinned %}<i class="bi bi-pin-angle"></i> 고정해제{% else %}<i class="bi bi-pin"></i> 고정{% endif %}
+                </button>
+              </form>
+              <form action="{{ url_for('delete_board_post', post_id=p.id, q=q, category=category, page=page, per_page=per_page, board_type=board_type) }}"
+                    method="post" class="d-inline"
+                    onsubmit="return confirm('정말 삭제하시겠습니까?');">
+                <button class="btn btn-danger btn-sm ms-1">
+                  <i class="bi bi-trash3"></i> 삭제
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="5" class="py-5">
+              <div class="text-center text-muted">
+                <div class="mb-2" style="font-size:42px;">🗂️</div>
+                <div class="fw-semibold">등록된 게시글이 없습니다.</div>
+                <div class="small">상단의 폼에서 새 글을 등록해 보세요.</div>
+              </div>
+            </td>
+          </tr>
+        {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </form>
+</div>
+
+<!-- 페이징 -->
+<nav class="mt-3">
+  <ul class="pagination justify-content-center mb-0">
+    <li class="page-item {{ 'disabled' if page <= 1 }}">
+      <a class="page-link" href="{{ url_for('admin_board_type', board_type=board_type, page=page-1, per_page=per_page, q=q, category=category) }}">이전</a>
+    </li>
+
+    {% set start = 1 if page-2 < 1 else page-2 %}
+    {% set end = total_pages if page+2 > total_pages else page+2 %}
+
+    {% if start > 1 %}
+      <li class="page-item">
+        <a class="page-link" href="{{ url_for('admin_board_type', board_type=board_type, page=1, per_page=per_page, q=q, category=category) }}">1</a>
+      </li>
+      {% if start > 2 %}
+        <li class="page-item disabled"><span class="page-link">…</span></li>
+      {% endif %}
+    {% endif %}
+
+    {% for p in range(start, end+1) %}
+      <li class="page-item {{ 'active' if p==page else '' }}">
+        <a class="page-link" href="{{ url_for('admin_board_type', board_type=board_type, page=p, per_page=per_page, q=q, category=category) }}">{{ p }}</a>
+      </li>
+    {% endfor %}
+
+    {% if end < total_pages %}
+      {% if end < total_pages-1 %}
+        <li class="page-item disabled"><span class="page-link">…</span></li>
+      {% endif %}
+      <li class="page-item">
+        <a class="page-link" href="{{ url_for('admin_board_type', board_type=board_type, page=total_pages, per_page=per_page, q=q, category=category) }}">{{ total_pages }}</a>
+      </li>
+    {% endif %}
+
+    <li class="page-item {{ 'disabled' if page >= total_pages }}">
+      <a class="page-link" href="{{ url_for('admin_board_type', board_type=board_type, page=page+1, per_page=per_page, q=q, category=category) }}">다음</a>
+    </li>
+  </ul>
+  <p class="text-center text-muted small mt-2">총 {{ total }}건 · {{ page }}/{{ total_pages }} 페이지</p>
+</nav>
+
+<!-- 상세/수정 모달 -->
+<div class="modal fade" id="postModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <span id="modalModeView">게시글 보기</span>
+          <span id="modalModeEdit" class="d-none">게시글 수정</span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+      </div>
+
+      <form id="editForm" method="post">
+        <div class="modal-body">
+          <div class="d-flex align-items-center gap-2 mb-3">
+            <span id="postModalBadge" class="badge bg-secondary"></span>
+            <small class="text-muted" id="postModalMeta"></small>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-md-8">
+              <label class="form-label">제목</label>
+              <input name="title" id="fTitle" class="form-control" disabled>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">카테고리</label>
+              <select name="category" id="fCategory" class="form-select" disabled>
+                <option value="공지">공지</option>
+                <option value="안내">안내</option>
+                <option value="점검">점검</option>
+                <option value="기타">기타</option>
+              </select>
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="is_pinned" id="fPinned" disabled>
+                <label class="form-check-label" for="fPinned">고정</label>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-3">
+            <label class="form-label">내용</label>
+            <textarea name="content" id="fContent" rows="8" class="form-control" style="white-space:pre-wrap" disabled></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="btnEdit" class="btn btn-primary">
+            <i class="bi bi-pencil-square"></i> 수정
+          </button>
+          <button type="submit" id="btnSave" class="btn btn-success d-none">
+            <i class="bi bi-check2-circle"></i> 저장
+          </button>
+          <button type="button" id="btnCancelEdit" class="btn btn-outline-secondary d-none">취소</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+  .text-truncate-2{ display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .row-hover:hover{ background:#f9fbff; }
+  .card{ box-shadow:0 6px 20px rgba(0,0,0,.04); border:1px solid #eef0f3; }
+</style>
+
+<script>
+  // 일괄삭제 버튼 활성화
+  const checkAll = document.getElementById('checkAll');
+  const rowChecks = document.querySelectorAll('.row-check');
+  const bulkBtn = document.getElementById('bulkDeleteBtn');
+  function refreshBulkBtn(){ bulkBtn.disabled = ![...rowChecks].some(ch=>ch.checked); }
+  checkAll?.addEventListener('change', () => { rowChecks.forEach(ch => ch.checked = checkAll.checked); refreshBulkBtn(); });
+  rowChecks.forEach(ch => ch.addEventListener('change', () => { if(!ch.checked) checkAll.checked=false; refreshBulkBtn(); }));
+
+  // 상세/수정 모달
+  let currentId = null;
+  function setEditMode(on){
+    modalModeView.classList.toggle('d-none', on);
+    modalModeEdit.classList.toggle('d-none', !on);
+    ['fTitle','fCategory','fPinned','fContent'].forEach(id=>document.getElementById(id).disabled = !on);
+    btnEdit.classList.toggle('d-none', on);
+    btnSave.classList.toggle('d-none', !on);
+    btnCancelEdit.classList.toggle('d-none', !on);
+  }
+
+  document.querySelectorAll('.post-link').forEach(el=>{
+    el.addEventListener('click', async (e)=>{
+      e.preventDefault();
+      currentId = el.dataset.id;
+      try{
+        const res = await fetch(`/admin/board/${currentId}`);
+        if(!res.ok) throw new Error('not found');
+        const d = await res.json();
+
+        fTitle.value = d.title || '';
+        fContent.value = d.content || '';
+        fCategory.value = d.category || '안내';
+        fPinned.checked = !!d.is_pinned;
+
+        postModalBadge.textContent = d.category || '안내';
+        postModalBadge.className = 'badge ' + (
+          d.category === '공지' ? 'bg-warning text-dark' :
+          d.category === '안내' ? 'bg-info text-dark' :
+          d.category === '점검' ? 'bg-danger' : 'bg-secondary'
+        );
+        postModalMeta.textContent = (d.is_pinned ? '상단 고정 · ' : '') + (d.created_at || '');
+
+        const params = new URLSearchParams({
+          q: "{{ q }}", category: "{{ category }}", page: "{{ page }}",
+          per_page: "{{ per_page }}", board_type: "{{ board_type }}"
+        }).toString();
+        editForm.action = `/admin/board/update/${currentId}?${params}`;
+
+        setEditMode(false);
+        new bootstrap.Modal(document.getElementById('postModal')).show();
+      }catch(err){ alert('게시글을 불러오지 못했습니다.'); }
+    });
+  });
+
+  btnEdit.addEventListener('click', ()=> setEditMode(true));
+  btnCancelEdit.addEventListener('click', ()=> setEditMode(false));
+</script>
+
+{% endblock %}

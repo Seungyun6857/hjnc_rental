@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}대여 완료{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 880px;">
+  <div class="text-center mb-4">
+    <h3 class="fw-bold">대여가 완료되었습니다!</h3>
+    <p class="text-muted">관리자에게 대여 내역을 보여주세요.</p>
+  </div>
+
+  <!-- 대여자 정보 요약 -->
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-6 col-md-3">
+          <div class="text-muted small">소속</div>
+          <div class="fw-semibold">{{ header.dept or '-' }}</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="text-muted small">이름</div>
+          <div class="fw-semibold">{{ header.username or '-' }}</div>
+        </div>
+        <div class="col-12 col-md-3">
+          <div class="text-muted small">연락처</div>
+          <div class="fw-semibold">{{ header.phone_fmt }}</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="text-muted small">대여기간</div>
+          <div class="fw-semibold">
+            {{ header.start_date or '-' }} ~ {{ header.end_date or '-' }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 품목 테이블 -->
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="m-0">대여 품목</h6>
+        <span class="badge text-bg-primary">총 {{ total_qty }}대</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle">
+          <thead class="table-light">
+            <tr class="text-center">
+              <th style="width: 120px;">장비 번호</th>
+              <th>장비명</th>
+              <th style="width: 100px;">대수</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if items %}
+              {% for it in items %}
+                <tr class="text-center">
+                  <td>{{ it.equipment_no or '-' }}</td>
+                  <td class="text-start">{{ it.equipment_name or '-' }}</td>
+                  <td>{{ it.qty }}</td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="3" class="text-center text-muted">대여 품목이 없습니다.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 버튼 -->
+  <div class="text-center">
+    <a href="{{ url_for('user_menu') }}" class="btn btn-primary btn-lg px-5">메인으로 돌아가기</a>
+  </div>
+
+</div>
+{% endblock %}

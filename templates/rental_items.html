@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}장비 선택{% endblock %}
+
+{% block content %}
+<h2 class="text-center mb-4">장비 선택</h2>
+
+<!-- 핸드무전기 카드 -->
+<div class="card mb-3">
+  <div class="card-body d-flex justify-content-between align-items-center">
+    <div>
+      <strong>핸드무전기</strong>
+      <span class="text-muted"> (총 개수: {{ total_count }}개 / 현재 개수: {{ current_count }}개)</span>
+    </div>
+    <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#equipModal">
+      선택 <span id="selCount">0</span>개
+    </button>
+  </div>
+</div>
+
+<!-- 메인 폼 -->
+<form method="post" action="{{ url_for('rental_items') }}" id="equipForm">
+  <!-- 선택된 장비 번호를 넣어줄 hidden input -->
+  <input type="hidden" name="items" id="selectedItems">
+
+  <!-- 서버측 검증용 경고 -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ 'danger' if category=='warning' else category }}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <button type="submit" class="btn btn-primary w-100">다음</button>
+</form>
+
+<!-- 모달 -->
+<div class="modal fade" id="equipModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">장비 선택</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="list-group">
+          {% for eq in equipments %}
+            <label class="list-group-item d-flex align-items-center">
+              <input type="checkbox" class="form-check-input me-2 equip-checkbox" value="{{ eq.unit_no }}">
+              <div>
+                <div><strong>{{ eq.item_name }}</strong> / {{ eq.model_name }}</div>
+                <div class="text-muted small">단말번호 {{ eq.unit_no }} / S/N {{ eq.serial_no }}</div>
+              </div>
+            </label>
+          {% else %}
+            <div class="list-group-item text-center text-muted">가용 장비가 없습니다.</div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+        <button type="button" class="btn btn-primary" id="confirmSelect">확인</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const checkboxes = document.querySelectorAll('.equip-checkbox');
+  const selCount = document.getElementById('selCount');
+  const hiddenInput = document.getElementById('selectedItems');
+
+  document.getElementById('confirmSelect').addEventListener('click', () => {
+    // 체크된 unit_no 모으기
+    const selected = Array.from(checkboxes)
+                      .filter(cb => cb.checked)
+                      .map(cb => cb.value);
+    selCount.textContent = selected.length;
+    hiddenInput.value = selected.join(',');  // hidden input에 CSV로 저장
+    // 모달 닫기
+    const modal = bootstrap.Modal.getInstance(document.getElementById('equipModal'));
+    modal.hide();
+  });
+</script>
+{% endblock %}

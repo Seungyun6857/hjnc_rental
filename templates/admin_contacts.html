@@ -1,0 +1,107 @@
+{% extends "base_admin.html" %}
+
+{% block content %}
+<h3 class="mb-4">협력업체 주소록</h3>
+
+<!-- ✅ 엑셀 업로드 / 다운로드 + 신규 등록 버튼 -->
+<div class="d-flex justify-content-end my-2 gap-2">
+  <form action="/admin/contacts/import_excel" method="POST" enctype="multipart/form-data" class="d-flex align-items-center gap-2">
+    <input type="file" name="file" accept=".xlsx" required class="form-control form-control-sm" style="max-width: 200px;">
+    <button class="btn btn-primary btn-sm">엑셀 업로드</button>
+  </form>
+  <a href="/admin/contacts/export_excel" class="btn btn-success btn-sm">엑셀 다운로드</a>
+
+  <!-- ▶ 신규 등록(모달 오픈) -->
+  <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#vendorCreateModal">
+    신규 등록
+  </button>
+</div>
+
+<!-- ✅ 업체 목록 테이블 -->
+<div class="table-responsive mt-3">
+  <table class="table table-bordered table-hover align-middle text-center">
+    <thead class="table-light">
+      <tr>
+        <th>업체명</th>
+        <th>담당자</th>
+        <th>연락처</th>
+        <th>그룹</th>
+        <th>등록일</th>
+        <th>메모</th>
+        <th>삭제</th>
+      </tr>
+    </thead>
+    <tbody id="partnersTbody">
+      {% for company in companies %}
+      <tr data-id="{{ company.id }}">
+        <td>{{ company.name }}</td>
+        <td>{{ company.manager }}</td>
+        <td>{{ company.phone }}</td>
+        <td>{{ company.group }}</td>
+        <td>{{ company.created_at }}</td>
+        <td class="text-truncate" style="max-width:260px">{{ company.memo }}</td>
+        <td>
+          <a href="{{ url_for('delete_contact', contact_id=company.id) }}"
+             class="btn btn-outline-danger btn-sm"
+             onclick="return confirm('정말 삭제하시겠습니까?')">삭제</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="7">등록된 업체가 없습니다.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- ✅ 신규 등록 모달 -->
+<div class="modal fade" id="vendorCreateModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <form class="modal-content" action="/admin/contacts/add" method="POST" id="vendorCreateForm">
+      <div class="modal-header">
+        <h5 class="modal-title">협력업체 신규 등록</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">업체명 <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">담당자 <span class="text-danger">*</span></label>
+            <input type="text" name="manager" class="form-control" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">연락처</label>
+            <input type="text" name="phone" class="form-control" placeholder="010-0000-0000">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">그룹</label>
+            <input type="text" name="group" class="form-control" placeholder="예: LPR, UPS, PDA...">
+          </div>
+          <div class="col-12">
+            <label class="form-label">메모</label>
+            <textarea name="memo" class="form-control" rows="3" placeholder="관리 메모를 입력하세요."></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div class="me-auto small text-muted">* 업체명/담당자는 필수입니다.</div>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button type="submit" class="btn btn-primary">저장</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 🔎 UX: 모달 열리면 첫 입력에 자동 포커스 -->
+<script>
+  const vendorModalEl = document.getElementById('vendorCreateModal');
+  vendorModalEl.addEventListener('shown.bs.modal', () => {
+    const first = document.querySelector('#vendorCreateModal input[name="name"]');
+    if (first) first.focus();
+  });
+</script>
+{% endblock %}

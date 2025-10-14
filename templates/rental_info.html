@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% block title %}대여 정보 입력{% endblock %}
+
+{% block head %}
+<style>
+  .hero {
+    background:#f1f5f9;
+    border-top:1px solid #e9ecef;
+    border-bottom:1px solid #e9ecef;
+  }
+  #signature-pad {
+    border: 1px solid #ced4da;
+    border-radius: 8px;
+    width: 100%;
+    height: 200px;          /* CSS 표시 높이 */
+    touch-action: none;     /* 스크롤 대신 그리기 */
+    background: #fff;
+  }
+  .agreement-box {
+    border: 1px solid #ced4da;
+    border-radius: 8px;
+    padding: 14px;
+    background-color: #f8fafc;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+  <!-- 상단 히어로 -->
+  <section class="hero py-4">
+    <div class="container">
+      <h2 class="text-center my-2">무전기 대여 신청</h2>
+    </div>
+  </section>
+
+  <div class="container py-4">
+    <form method="POST" action="{{ url_for('rental_info') }}" onsubmit="return validatePhoneAndSignature()" class="card shadow-sm p-3 p-md-4">
+      <!-- 소속 -->
+      <div class="mb-3">
+        <label for="dept" class="form-label">소속</label>
+        <select class="form-select" name="dept" id="dept" required>
+          <option value="">소속 선택</option>
+          <option value="S&P">S&amp;P</option>
+          <option value="신양선박">신양선박</option>
+          <option value="해양공사">해양공사</option>
+          <option value="범아상사">범아상사</option>
+          <option value="미성SNP">미성SNP</option>
+          <option value="국보기업">국보기업</option>
+          <option value="기타">기타</option>
+        </select>
+      </div>
+
+      <!-- 성함 -->
+      <div class="mb-3">
+        <label for="user_name" class="form-label">성함</label>
+        <input type="text" class="form-control" name="user_name" id="user_name" placeholder="성함" required>
+      </div>
+
+      <!-- 연락처 -->
+      <div class="mb-3">
+        <label for="phone" class="form-label">연락처</label>
+        <input type="text" class="form-control" name="phone" id="phone"
+               placeholder="010-0000-0000" maxlength="13"
+               oninput="formatPhone(this)" required>
+        <div class="form-text">숫자만 입력하면 자동으로 하이픈(-)이 입력됩니다.</div>
+      </div>
+
+      <!-- 대여 기간 -->
+      <div class="row g-3 mb-2">
+        <div class="col-md-6">
+          <label for="start_date" class="form-label">대여 시작일</label>
+          <input type="date" class="form-control" name="start_date" id="start_date" required>
+        </div>
+        <div class="col-md-6">
+          <label for="end_date" class="form-label">대여 종료일</label>
+          <input type="date" class="form-control" name="end_date" id="end_date" required>
+        </div>
+      </div>
+
+      <!-- 개인정보 동의서 -->
+      <div class="agreement-box my-3">
+        <strong>[개인정보 수집 및 이용 동의서]</strong><br><br>
+        1. <strong>수집 항목</strong>: 이름, 소속, 연락처<br>
+        2. <strong>수집 목적</strong>: 무전기 대여 시스템 사용자 인증 및 사용 이력 관리<br>
+        3. <strong>보유 기간</strong>: 퇴사 시 또는 1년 경과 시 자동 파기<br>
+        4. <strong>동의 거부 시</strong>: 무인 대여 시스템 사용이 제한될 수 있습니다.<br>
+        5. <strong>책임 사항</strong>: 대여한 장비의 <u>분실 또는 파손 시 사용자에게 책임</u>이 있으며, 회사 내부 지침에 따라 변상 또는 조치가 이루어질 수 있습니다.<br><br>
+        위 내용을 충분히 이해하였으며, 개인정보 수집 및 이용 및 책임 사항에 동의합니다.
+      </div>
+
+      <!-- 동의 체크박스 -->
+      <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="agree_terms" name="agree_terms" required>
+        <label class="form-check-label" for="agree_terms">위 내용을 읽고 동의합니다.</label>
+      </div>
+
+      <!-- 서명 -->
+      <div class="mb-3">
+        <label class="form-label">서명</label>
+        <canvas id="signature-pad"></canvas>
+        <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="clearSignature()">서명 지우기</button>
+        <input type="hidden" id="signature" name="signature">
+      </div>
+
+      <button type="submit" class="btn btn-primary w-100 py-2">다음</button>
+    </form>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 날짜 기본값 (오늘 ~ +7일)
+(function setDefaultDates(){
+  const today = new Date();
+  const toISO = d => d.toISOString().slice(0,10);
+  const start = document.getElementById('start_date');
+  const end   = document.getElementById('end_date');
+  if (start && !start.value) start.value = toISO(today);
+  if (end && !end.value) {
+    const d2 = new Date(today); d2.setDate(d2.getDate()+7);
+    end.value = toISO(d2);
+  }
+})();
+
+// 전화번호 하이픈 자동 처리
+function formatPhone(input) {
+  let value = input.value.replace(/[^0-9]/g, '');
+  let result = '';
+  if (value.length < 4) {
+    result = value;
+  } else if (value.length < 8) {
+    result = value.slice(0, 3) + '-' + value.slice(3);
+  } else {
+    result = value.slice(0, 3) + '-' + value.slice(3, 7) + '-' + value.slice(7, 11);
+  }
+  input.value = result;
+}
+
+// 제출 전 전화번호와 서명 확인
+function validatePhoneAndSignature() {
+  const input = document.getElementById('phone');
+  let value = input.value.replace(/[^0-9]/g, '');
+  if (value.length !== 11) {
+    alert("연락처는 010-0000-0000 형식으로 입력해주세요.");
+    return false;
+  }
+  input.value = value.slice(0,3) + '-' + value.slice(3,7) + '-' + value.slice(7);
+
+  const sig = document.getElementById('signature').value;
+  if (!sig) {
+    alert("서명을 입력해주세요.");
+    return false;
+  }
+  return true;
+}
+
+// ===== 서명 패드 (PC/모바일) =====
+const canvas = document.getElementById('signature-pad');
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
+let isDrawing = false;
+let path = [];
+
+// 레티나 대응 리사이즈
+function resizeCanvas() {
+  const ratio = Math.max(window.devicePixelRatio || 1, 1);
+  const cssWidth  = canvas.clientWidth;
+  const cssHeight = canvas.clientHeight;
+  canvas.width  = Math.floor(cssWidth  * ratio);
+  canvas.height = Math.floor(cssHeight * ratio);
+  ctx.scale(ratio, ratio);
+  draw();
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+function pointerPos(e){
+  const rect = canvas.getBoundingClientRect();
+  const pt = ('touches' in e) ? e.touches[0] : e;
+  return { x: pt.clientX - rect.left, y: pt.clientY - rect.top };
+}
+
+function startDraw(e){
+  isDrawing = true;
+  path.push([]);
+  addPoint(e);
+}
+function endDraw(){
+  isDrawing = false;
+  document.getElementById('signature').value = path.length ? JSON.stringify(path) : "";
+}
+function addPoint(e){
+  if(!isDrawing) return;
+  const {x,y} = pointerPos(e);
+  path[path.length-1].push({x,y});
+  draw();
+}
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 2;
+  for(const stroke of path){
+    ctx.beginPath();
+    stroke.forEach((p,i)=>{
+      if(i===0) ctx.moveTo(p.x,p.y);
+      else ctx.lineTo(p.x,p.y);
+    });
+    ctx.stroke();
+  }
+}
+
+canvas.addEventListener('mousedown', startDraw);
+canvas.addEventListener('mousemove', addPoint);
+window.addEventListener('mouseup', endDraw);
+
+canvas.addEventListener('touchstart', (e)=>{ e.preventDefault(); startDraw(e); }, {passive:false});
+canvas.addEventListener('touchmove',  (e)=>{ e.preventDefault(); addPoint(e);  }, {passive:false});
+canvas.addEventListener('touchend',   (e)=>{ e.preventDefault(); endDraw();   }, {passive:false});
+
+function clearSignature(){
+  path = [];
+  draw();
+  document.getElementById('signature').value = "";
+}
+window.clearSignature = clearSignature;
+</script>
+{% endblock %}

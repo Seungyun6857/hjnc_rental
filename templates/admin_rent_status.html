@@ -1,0 +1,375 @@
+{% extends "base_admin.html" %}
+{% block title %}대여 현황{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+  <h4 class="mb-4"><i class="fas fa-box-open me-2"></i>대여 현황</h4>
+
+  <div class="row g-4">
+    <!-- ============ LEFT: 대여 가능 장비(묶음별) ============ -->
+    <div class="col-12 col-xl-5">
+      <div class="card h-100">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <div>
+            <strong>대여 가능 장비</strong>
+            <span class="badge bg-primary ms-2">총 {{ total_units_count or 0 }}대</span>
+            <span class="badge bg-success ms-2">현재 {{ available_count or 0 }}대</span>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#modalRegister">등록</button>
+            <button class="btn btn-sm btn-outline-danger"  data-bs-toggle="modal" data-bs-target="#modalDelete">삭제</button>
+            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#availModal">선택하기</button>
+          </div>
+        </div>
+
+        <div class="card-body">
+          {% if available_bundles and available_bundles|length %}
+            <div class="list-group" id="bundleList">
+              {% for b in available_bundles %}
+                <div
+                  class="list-group-item d-flex justify-content-between align-items-center bundle-row"
+                  role="button" tabindex="0" style="cursor:pointer"
+                  data-bundle-id="{{ b.bundle_id or 0 }}"
+                  data-item-name="{{ b.item_name or '무전기' }}"
+                  data-model-name="{{ b.model_name or 'XiR-E8600' }}">
+                  <div>
+                    <div class="fw-semibold">
+                      {{ b.item_name or '무전기' }}
+                      {% if b.bundle_id == 0 %}
+                        <span class="badge text-bg-secondary ms-1">미분류</span>
+                      {% endif %}
+                    </div>
+                    <div class="text-muted small">{{ b.model_name or 'XiR-E8600' }}</div>
+                  </div>
+                  <div class="text-nowrap">
+                    <span class="badge bg-primary-subtle text-primary me-1">총 {{ b.total_qty }}</span>
+                    <span class="badge bg-success-subtle text-success">가용 {{ b.available_qty }}</span>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+            <div class="text-muted small mt-2">※ 같은 이름/모델이라도 각 등록은 별도 묶음으로 관리됩니다.</div>
+          {% else %}
+            <div class="text-center text-muted py-3">현재 대여 가능한 장비가 없습니다.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ RIGHT: 대여 중 장비 표 ============ -->
+    <div class="col-12 col-xl-7">
+      <div class="card mb-3">
+        <div class="card-body d-flex align-items-center justify-content-between">
+          <div>
+            <h6 class="card-title mb-1">총 대여 건수</h6>
+            <p class="card-text mb-0">{{ rental_count or 0 }} 건</p>
+          </div>
+          <form class="d-flex" method="get" action="{{ url_for('admin_rent_status') }}">
+            <input type="text" id="searchInput" name="q" value="{{ q or '' }}"
+                   class="form-control form-control-sm" placeholder="장비 번호 또는 S/N 검색" style="width:260px">
+          </form>
+        </div>
+      </div>
+
+      <form method="POST" action="{{ url_for('delete_rentals') }}">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div>
+            <button type="button" class="btn btn-outline-primary btn-sm me-2" id="select-all">전체 선택</button>
+            <button type="submit" class="btn btn-outline-danger btn-sm">삭제</button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-bordered table-hover align-middle text-center mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="width: 40px;"><input type="checkbox" id="checkAll"></th>
+                <th>사용자명</th>
+                <th>부서</th>
+                <th>전화번호</th>
+                <th>장비 번호</th>
+                <th>S/N</th>
+                <th>대여일시</th>
+                <th>반납 예정일</th>
+              </tr>
+            </thead>
+            <tbody id="rentalTable">
+              {% for r in rent_list %}
+                <tr>
+                  <td><input type="checkbox" class="row-check" name="serials" value="{{ r[4] }}"></td>
+                  <td>{{ r[1] }}</td>
+                  <td>{{ r[2] }}</td>
+                  <td>{{ r[3] }}</td>
+                  <td>{{ r[5] }}</td>
+                  <td>{{ r[4] }}</td>
+                  <td>{{ r[7] }}</td>
+                  <td>{{ r[8] }}</td>
+                </tr>
+              {% else %}
+                <tr><td colspan="8" class="text-muted py-5">대여 내역이 없습니다.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- 모달: 대여 가능 장비 (선택 보기) -->
+<div class="modal fade" id="availModal" tabindex="-1" aria-labelledby="availLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="availLabel">대여 가능 장비</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+      </div>
+      <div class="modal-body">
+        {% if (available_count|int) > 0 %}
+          <div class="list-group">
+            {% for u in available_units %}
+              <label class="list-group-item d-flex align-items-center">
+                <input class="form-check-input me-2" type="checkbox" value="{{ u.unit_no }}" disabled>
+                <div>
+                  <div><strong>{{ u.item_name or '무전기' }}</strong> / {{ u.model_name or 'XiR-E8600' }}</div>
+                  <div class="text-muted small">단말번호 {{ u.unit_no }} · S/N {{ u.serial_no }}</div>
+                </div>
+              </label>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="text-center text-muted">현재 대여 가능한 장비가 없습니다.</div>
+        {% endif %}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 모달: 신규 장비 등록 -->
+<div class="modal fade" id="modalRegister" tabindex="-1" aria-labelledby="registerLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <form class="modal-content" method="POST" action="{{ url_for('admin_add_equipment_bundle') }}">
+      <div class="modal-header">
+        <h5 class="modal-title" id="registerLabel">신규 장비 등록</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-sm-6">
+            <label class="form-label">장비명</label>
+            <input type="text" name="item_name" class="form-control" placeholder="예: 무전기" required>
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label">모델명</label>
+            <input type="text" name="model_name" class="form-control" placeholder="예: XiR-E8600" required>
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label">카테고리(선택)</label>
+            <select name="category" class="form-select">
+              <option value="">선택하세요</option>
+              <option>전자 제품</option>
+              <option>소모품</option>
+              <option>유지보수 제품</option>
+              <option>공구</option>
+              <option>기타</option>
+              <option>잡자재</option>
+            </select>
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label">위치(선택)</label>
+            <input type="text" name="location" class="form-control" placeholder="예: 창고 A-3">
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label">총 수량</label>
+            <input type="number" name="total_qty" class="form-control" min="1" step="1" value="1" required>
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label">현재 개수</label>
+            <input type="text" class="form-control" value="{{ total_units_count or 0 }}" readonly>
+            <input type="hidden" name="start_unit_no" value="{{ (total_units_count or 0) + 1 }}">
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label">S/N 시작값</label>
+            <input type="text" name="start_serial" class="form-control" placeholder="예: 000001">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">취소</button>
+        <button type="submit" class="btn btn-success">등록</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 모달: 대여 가능 장비 삭제 -->
+<div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="deleteLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <form class="modal-content" method="POST" action="{{ url_for('admin_delete_walkies') }}">
+      <div class="modal-header">
+        <h5 class="modal-title" id="deleteLabel">대여 가능 장비 삭제</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <small class="text-muted">※ 대여 중인 장비는 삭제되지 않습니다.</small>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="delAll">
+            <label class="form-check-label" for="delAll">전체 선택</label>
+          </div>
+        </div>
+        <div class="list-group">
+          {% for u in available_units %}
+            <label class="list-group-item">
+              <input class="form-check-input me-2 del-check" type="checkbox" name="unit_nos" value="{{ u.unit_no }}">
+              <span class="fw-bold">{{ u.item_name or '무전기' }}</span> / {{ u.model_name or 'XiR-E8600' }}
+              (단말번호: {{ u.unit_no }})
+              <span class="text-muted">S/N: {{ u.serial_no }}</span>
+            </label>
+          {% else %}
+            <div class="text-center text-muted">삭제할 수 있는 대여 가능 장비가 없습니다.</div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">취소</button>
+        <button type="submit" class="btn btn-danger">삭제</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 모달: 묶음 상세(부트스트랩) -->
+<div class="modal fade" id="bundleModal" tabindex="-1" aria-labelledby="bundleModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="bundleModalLabel">단말 상세</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2 text-muted small" id="bundleMeta"></div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="width:110px">단말번호</th>
+                <th style="width:130px">S/N</th>
+                <th style="width:90px">상태</th>
+                <th>대여자/부서/연락처</th>
+                <th style="width:180px">대여일시</th>
+              </tr>
+            </thead>
+            <tbody id="bundleTbody">
+              <tr><td colspan="5" class="text-center text-muted py-3">불러오는 중…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ============== 공통 테이블 체크박스 ============== */
+const checkAll = document.getElementById('checkAll');
+if (checkAll) {
+  checkAll.addEventListener('change', e => {
+    document.querySelectorAll('.row-check').forEach(cb => {
+      cb.checked = e.target.checked;
+      cb.closest('tr')?.classList.toggle('table-active', e.target.checked);
+    });
+  });
+}
+document.querySelectorAll('.row-check').forEach(cb => {
+  cb.addEventListener('change', e => {
+    e.target.closest('tr')?.classList.toggle('table-active', e.target.checked);
+  });
+});
+document.getElementById('select-all')?.addEventListener('click', () => {
+  document.querySelectorAll('.row-check').forEach(cb => {
+    cb.checked = true; cb.closest('tr')?.classList.add('table-active');
+  });
+  if (checkAll) checkAll.checked = true;
+});
+
+/* ============== 삭제 모달 전체선택 ============== */
+document.getElementById('delAll')?.addEventListener('change', e => {
+  document.querySelectorAll('.del-check').forEach(cb => cb.checked = e.target.checked);
+});
+
+/* ============== 묶음 클릭 → 상세 모달 ============== */
+function openBundleModal(metaText, rows){
+  // 메타
+  document.getElementById('bundleMeta').textContent = metaText;
+
+  // 바디
+  const tbody = document.getElementById('bundleTbody');
+  if (!rows || rows.length === 0){
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">표시할 단말이 없습니다.</td></tr>';
+  } else {
+    tbody.innerHTML = rows.map(u=>{
+      const who = u.borrower || '';
+      const when = u.rental_date || '';
+      const stateBadge = u.state === 'rented'
+        ? '<span class="badge text-bg-warning">대여중</span>'
+        : '<span class="badge text-bg-success">가용</span>';
+      return `
+        <tr>
+          <td>${u.unit_no || ''}</td>
+          <td>${u.serial_no || ''}</td>
+          <td>${stateBadge}</td>
+          <td>${who}</td>
+          <td>${when}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  // 부트스트랩 모달 열기
+  const m = new bootstrap.Modal(document.getElementById('bundleModal'));
+  m.show();
+}
+
+async function fetchBundle(bundleId){
+  // **중요**: 백엔드 라우트와 동일한 고정 경로 사용 → 엔드포인트 이름 문제 방지
+  const url = `/admin/walkies/bundle/${bundleId}`;
+  const res = await fetch(url, {headers: {'Accept':'application/json'}});
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  if (!data.ok) throw new Error('응답 형식 오류');
+  return data.units || [];
+}
+
+// 이벤트 위임: .bundle-row 클릭 캡처
+document.addEventListener('click', async (ev) => {
+  const row = ev.target.closest('.bundle-row');
+  if (!row) return;
+
+  const bid   = row.dataset.bundleId || '0';
+  const iname = row.dataset.itemName || '무전기';
+  const mname = row.dataset.modelName || 'XiR-E8600';
+
+  try {
+    // 로딩 표시
+    document.getElementById('bundleMeta').textContent = '불러오는 중…';
+    document.getElementById('bundleTbody').innerHTML =
+      '<tr><td colspan="5" class="text-center text-muted py-3">불러오는 중…</td></tr>';
+
+    const units = await fetchBundle(bid);
+    const meta = `묶음 #${bid} · ${iname} / ${mname} · ${units.length}대`;
+    openBundleModal(meta, units);
+  } catch (err){
+    console.error(err);
+    alert('묶음 정보를 불러오지 못했습니다.');
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "base_admin.html" %}
+{% block title %}사원 리스트{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h3 class="mb-0">사원 리스트</h3>
+    <div>
+      <a class="btn btn-primary" href="{{ url_for('admin_user_add') }}">사원 추가</a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('admin_rank_dept_list') }}">직급/부서 보기</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="width:64px;" class="text-center">No</th>
+              <th>이름</th>
+              <th>부서</th>
+              <th>직급</th>
+              <th>연락처</th>
+              <th>이메일</th>
+              <th style="width:160px;">등록일</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if employees and employees|length %}
+              {% for e in employees %}
+              <tr>
+                <td class="text-center">{{ loop.revindex }}</td>
+                <td>{{ e.name }}</td>
+                <td>{{ e.dept_name or '' }}</td>
+                <td>{{ e.rank_name or '' }}</td>
+                <td>{{ e.phone or '' }}</td>
+                <td>{{ e.email or '' }}</td>
+                <td>{{ e.created_at or '' }}</td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="7" class="text-center text-muted py-5">등록된 사원이 없습니다.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

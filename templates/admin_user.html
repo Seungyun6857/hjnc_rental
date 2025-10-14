@@ -1,0 +1,72 @@
+{% extends "base_admin.html" %}
+
+{% block content %}
+<div class="container mt-4">
+  <h3><i class="bi bi-people-fill me-2"></i> 사용자 관리</h3>
+
+  <!-- 사용자 추가 폼 -->
+  <form method="POST" action="{{ url_for('add_user') }}" class="row g-3 mt-3">
+    <div class="col-md-3">
+      <input type="text" class="form-control" name="username" placeholder="이름" required>
+    </div>
+    <div class="col-md-3">
+      <input type="text" class="form-control" name="dept" placeholder="부서" required>
+    </div>
+    <div class="col-md-3">
+      <input type="text" class="form-control" name="phone" placeholder="전화번호" required>
+    </div>
+    <div class="col-md-2">
+      <input type="text" class="form-control" name="employee_id" placeholder="사번" required>
+    </div>
+    <div class="col-md-1 d-grid">
+      <button type="submit" class="btn btn-primary">추가</button>
+    </div>
+  </form>
+
+  <!-- 사용자 목록 테이블 -->
+  <form method="POST" action="{{ url_for('update_users') }}">
+    <div class="table-responsive mt-4">
+      <table class="table table-bordered table-hover align-middle text-center">
+        <thead class="table-light">
+          <tr>
+            <th><input type="checkbox" id="check-all"></th>
+            <th>이름</th>
+            <th>부서</th>
+            <th>전화번호</th>
+            <th>사번</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if users %}
+            {% for user in users %}
+            <tr>
+              <td><input type="checkbox" name="delete_ids" value="{{ user.id }}"></td>
+              <td><input type="text" name="username_{{ user.id }}" value="{{ user.username }}" class="form-control" required></td>
+              <td><input type="text" name="dept_{{ user.id }}" value="{{ user.dept }}" class="form-control" required></td>
+              <td><input type="text" name="phone_{{ user.id }}" value="{{ user.phone }}" class="form-control" required></td>
+              <td><input type="text" name="employee_id_{{ user.id }}" value="{{ user.employee_id }}" class="form-control" required></td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="5" class="text-center">등록된 사용자가 없습니다.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="d-flex justify-content-end gap-2">
+      <button type="submit" name="action" value="update" class="btn btn-success">저장</button>
+      <button type="submit" name="action" value="delete" class="btn btn-danger">삭제</button>
+    </div>
+  </form>
+</div>
+
+<script>
+  document.getElementById("check-all").addEventListener("click", function() {
+    const checkboxes = document.querySelectorAll('input[name="delete_ids"]');
+    checkboxes.forEach(cb => cb.checked = this.checked);
+  });
+</script>
+{% endblock %}

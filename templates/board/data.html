@@ -1,0 +1,219 @@
+{% extends "base_admin.html" %}
+{% block content %}
+
+<style>
+/* ===== Polished Board UI ===== */
+.board-toolbar { gap:.5rem; }
+.board-toolbar .form-select, .board-toolbar .form-control { height: 38px; }
+.badge-pill { border-radius: 999px; padding: .35rem .6rem; font-weight: 600; }
+.badge-soft-primary { background: var(--bs-primary-bg-subtle, #eef4ff); color: var(--bs-primary); }
+.table-board thead th { background:#fff; position: sticky; top:0; z-index:1; }
+.table-board tbody tr:hover { background:#fafcff; }
+.table-board .title a { color: var(--bs-body-color); text-decoration: none; }
+.table-board .title a:hover { color: var(--bs-primary); text-decoration: underline; }
+.board-note { color: var(--bs-secondary-color); }
+.pagination-slim .btn { min-width: 56px; }
+</style>
+
+<div class="container-fluid py-3">
+
+  <!-- 상단 탭(보드 전환) -->
+  <div class="d-flex align-items-center justify-content-start gap-2 mb-2">
+    {% set tabs = [('work','업무'),('general','일반'),('data','자료'),('qna','Q&A'),('all','전체')] %}
+    {% for key,label in tabs %}
+      <a class="btn btn-sm {% if board_type==key %}btn-primary{% else %}btn-outline-primary{% endif %}"
+         href="{{ url_for('admin_board_type', board_type=key) }}">{{ label }}</a>
+    {% endfor %}
+    <div class="ms-auto small text-muted">총 {{ total }}건</div>
+  </div>
+
+  <!-- 툴바: 선택삭제 · 보드/페이지/검색 · 등록버튼(모달) -->
+  <div class="d-flex flex-wrap align-items-center justify-content-between mb-2 board-toolbar">
+    <form class="d-flex align-items-center gap-2" method="post" action="{{ url_for('bulk_delete_board') }}">
+      <input type="hidden" name="board_type" value="{{ board_type }}">
+      <button type="submit" class="btn btn-sm btn-outline-danger">
+        <i class="bi bi-trash"></i> 선택 삭제
+      </button>
+    </form>
+
+    <div class="d-flex flex-wrap align-items-center gap-2 ms-auto">
+      <!-- 보드 선택(스샷처럼 셀렉트로도 전환 가능) -->
+      <select id="boardSwitch" class="form-select form-select-sm" style="width:auto">
+        {% for key,label in tabs %}
+          <option value="{{ key }}" {% if board_type==key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+
+      <!-- 페이지당 -->
+      <select id="perPage" class="form-select form-select-sm" style="width:auto">
+        <option value="10" {% if per_page==10 %}selected{% endif %}>10개</option>
+        <option value="20" {% if per_page==20 %}selected{% endif %}>20개</option>
+        <option value="50" {% if per_page==50 %}selected{% endif %}>50개</option>
+      </select>
+
+      <!-- 검색 -->
+      <form id="searchForm" class="d-flex align-items-center gap-1" method="get"
+            action="{{ url_for('admin_board_type', board_type=board_type) }}">
+        <input type="hidden" name="per_page" value="{{ per_page }}">
+        <div class="input-group input-group-sm">
+          <input type="text" name="q" value="{{ q or '' }}" class="form-control"
+                 placeholder="검색어(제목+내용)">
+          <button class="btn btn-outline-secondary" type="submit">
+            <i class="bi bi-search"></i> 검색
+          </button>
+        </div>
+      </form>
+
+      <!-- 등록 버튼 → 모달 -->
+      <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#postModal">
+        <i class="bi bi-plus-lg"></i> 등록
+      </button>
+    </div>
+  </div>
+
+  <!-- 목록 -->
+  <div class="table-responsive">
+    <table class="table table-hover align-middle table-board">
+      <thead>
+        <tr>
+          <th style="width:44px"><input type="checkbox" id="checkAll"></th>
+          <th class="text-start">제목 / 내용</th>
+          <th style="width:160px" class="text-center">구분</th>
+          <th style="width:180px">작성일</th>
+          <th style="width:150px">관리</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if posts and posts|length %}
+          {% for p in posts %}
+          <tr>
+            <td><input type="checkbox" class="row-check" value="{{ p.id }}" form="bulkDeleteForm" name="ids"></td>
+            <td class="text-start">
+              <div class="title fw-semibold">
+                <a href="{{ url_for('admin_board_view', post_id=p.id) }}">{{ p.title }}</a>
+              </div>
+              <div class="board-note small mt-1">
+                {{ (p.content or '')|striptags|truncate(180, True) }}
+              </div>
+            </td>
+            <td class="text-center">
+              {% if p.category %}
+                <span class="badge badge-pill badge-soft-primary">{{ p.category }}</span>
+              {% else %}
+                <span class="text-muted small">-</span>
+              {% endif %}
+            </td>
+            <td class="text-muted small">{{ p.created_at }}</td>
+            <td>
+              <div class="d-flex gap-1">
+                <form method="post"
+                      action="{{ url_for('toggle_pin', post_id=p.id) }}?board_type={{ board_type }}">
+                  <button class="btn btn-sm {% if p.is_pinned %}btn-warning{% else %}btn-outline-warning{% endif %}"
+                          type="submit">{{ '해제' if p.is_pinned else '고정' }}</button>
+                </form>
+                <form method="post"
+                      action="{{ url_for('delete_board_post', post_id=p.id) }}?board_type={{ board_type }}"
+                      onsubmit="return confirm('삭제하시겠습니까?');">
+                  <button class="btn btn-sm btn-outline-danger" type="submit">삭제</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="5" class="text-center text-muted py-4">게시글이 없습니다.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 페이지네이션 -->
+  <div class="d-flex justify-content-center align-items-center gap-2 my-3 pagination-slim">
+    {% set prev_page = page-1 if page>1 else 1 %}
+    {% set next_page = page+1 if page < total_pages else total_pages %}
+    <a class="btn btn-outline-secondary btn-sm"
+       href="{{ url_for('admin_board_type', board_type=board_type, page=prev_page, per_page=per_page, q=q) }}">이전</a>
+    <span class="btn btn-primary btn-sm disabled">{{ page }}</span>
+    <a class="btn btn-outline-secondary btn-sm"
+       href="{{ url_for('admin_board_type', board_type=board_type, page=next_page, per_page=per_page, q=q) }}">다음</a>
+  </div>
+
+</div>
+
+<!-- ===================== 등록 모달 ===================== -->
+<div class="modal fade" id="postModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('add_board_post') }}">
+        <div class="modal-header">
+          <h5 class="modal-title">게시글 등록</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" name="board_type" value="{{ board_type }}">
+          <div class="row g-2 mb-2">
+            <div class="col-lg-9">
+              <input type="text" name="title" class="form-control" placeholder="제목을 입력하세요" required>
+            </div>
+            <div class="col-lg-2">
+              <select name="category" class="form-select">
+                {% set cats = categories or ['', '공지','안내','점검','기타'] %}
+                {% for c in cats %}
+                  <option value="{{ c }}" {% if c== (category or '') %}selected{% endif %}>
+                    {{ c if c else '카테고리' }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-lg-1 d-flex align-items-center">
+              <div class="form-check ms-lg-2">
+                <input class="form-check-input" type="checkbox" id="pinTop" name="is_pinned" value="1">
+                <label class="form-check-label" for="pinTop">고정</label>
+              </div>
+            </div>
+          </div>
+          <textarea name="content" rows="8" class="form-control" placeholder="내용을 입력하세요"></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">취소</button>
+          <button type="submit" class="btn btn-primary">등록</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<!-- ===================================================== -->
+
+<script>
+// 보드 셀렉트 → 라우트 이동
+document.getElementById('boardSwitch')?.addEventListener('change', function(){
+  const type = this.value || 'all';
+  const url = new URL(window.location.href);
+  url.pathname = `{{ url_for('admin_board_type', board_type='all') }}`.replace('/all', `/${type}`);
+  window.location.href = url.toString();
+});
+
+// 페이지당 개수 변경
+document.getElementById('perPage')?.addEventListener('change', function(){
+  const url = new URL(window.location.href);
+  url.searchParams.set('per_page', this.value);
+  url.searchParams.set('page', 1);
+  window.location.href = url.toString();
+});
+
+// 체크박스 전체선택
+const checkAll = document.getElementById('checkAll');
+checkAll?.addEventListener('change', function(){
+  document.querySelectorAll('.row-check').forEach(cb=>{
+    cb.checked = checkAll.checked;
+    cb.closest('tr')?.classList.toggle('table-active', cb.checked);
+  });
+});
+document.querySelectorAll('.row-check').forEach(cb=>{
+  cb.addEventListener('change', function(){
+    this.closest('tr')?.classList.toggle('table-active', this.checked);
+  });
+});
+</script>
+
+{% endblock %}

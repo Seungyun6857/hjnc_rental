@@ -1,0 +1,13 @@
+{% extends "base_admin.html" %}
+{% block content %}
+<div class="container py-4">
+  <h4 class="mb-3">{{ post.title }}</h4>
+  <div class="text-muted small mb-2">
+    분류: {{ post.board_type }} / {{ post.category }} · 작성일: {{ post.created_at }}
+  </div>
+  <hr>
+  <div style="white-space:pre-wrap;">{{ post.content }}</div>
+  <hr>
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('admin_board_type', board_type='all') }}">목록</a>
+</div>
+{% endblock %}

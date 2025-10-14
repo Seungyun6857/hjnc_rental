@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}사용자 메뉴{% endblock %}
+
+{% block head %}
+<style>
+  .hero {
+    background:#f1f5f9;
+    border-top:1px solid #e9ecef;
+    border-bottom:1px solid #e9ecef;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+  <!-- 상단 히어로 -->
+  <section class="hero py-4">
+    <div class="container">
+      <h2 class="text-center my-2">사용자 메뉴</h2>
+    </div>
+  </section>
+
+  <div class="container py-4">
+    <div class="row g-3 justify-content-center">
+      <div class="col-12 col-md-6 col-lg-4">
+        <a href="{{ url_for('rental_info') }}" class="btn btn-primary w-100 py-3">
+          대여하기
+        </a>
+      </div>
+      <div class="col-12 col-md-6 col-lg-4">
+        <a href="{{ url_for('return_info') }}" class="btn btn-outline-primary w-100 py-3">
+          반납하기
+        </a>
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}반납자 정보 입력{% endblock %}
+
+{% block head %}
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+  .hero {
+    background:#f1f5f9;
+    border-top:1px solid #e9ecef;
+    border-bottom:1px solid #e9ecef;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+  <!-- 상단 히어로 -->
+  <section class="hero py-4">
+    <div class="container">
+      <h2 class="text-center my-2">반납자 정보 입력</h2>
+    </div>
+  </section>
+
+  <div class="container py-4">
+    <!-- 조회 폼: 소속/성함/연락처 -->
+    <form method="POST" action="{{ url_for('return_info') }}" class="card mb-4 shadow-sm" onsubmit="return validatePhone()">
+      <div class="card-body row g-3">
+        <!-- 소속 -->
+        <div class="col-12 col-md-4">
+          <label for="dept" class="form-label">소속</label>
+          <select class="form-select" name="dept" id="dept" required>
+            <option value="">소속 선택</option>
+            <option value="S&P"     {{ 'selected' if dept_input=='S&P' }}>S&amp;P</option>
+            <option value="신양선박" {{ 'selected' if dept_input=='신양선박' }}>신양선박</option>
+            <option value="해양공사" {{ 'selected' if dept_input=='해양공사' }}>해양공사</option>
+            <option value="범아상사" {{ 'selected' if dept_input=='범아상사' }}>범아상사</option>
+            <option value="미성SNP" {{ 'selected' if dept_input=='미성SNP' }}>미성SNP</option>
+            <option value="국보기업" {{ 'selected' if dept_input=='국보기업' }}>국보기업</option>
+            <option value="기타"     {{ 'selected' if dept_input=='기타' }}>기타</option>
+          </select>
+        </div>
+
+        <!-- 성함 -->
+        <div class="col-12 col-md-4">
+          <label for="user_name" class="form-label">성함</label>
+          <input type="text" class="form-control" name="user_name" id="user_name"
+                 placeholder="성함" value="{{ user_name_input }}" required>
+        </div>
+
+        <!-- 연락처 -->
+        <div class="col-12 col-md-4">
+          <label for="phone" class="form-label">연락처</label>
+          <input type="text" class="form-control"
+                 name="phone" id="phone"
+                 placeholder="010-0000-0000" maxlength="13"
+                 oninput="formatPhone(this)" value="{{ phone_input }}" required>
+          <div class="form-text">숫자만 입력하면 자동으로 하이픈(-)이 입력됩니다.</div>
+        </div>
+
+        <div class="col-12">
+          <button type="submit" class="btn btn-primary w-100">조회</button>
+        </div>
+      </div>
+    </form>
+
+    <!-- 조회 결과(소속 기준) -->
+    {% if rentals and rentals|length > 0 %}
+      <div class="card shadow-sm">
+        <div class="card-header bg-light fw-semibold">
+          미반납 목록 ({{ dept_input }} / {{ rentals|length }}건)
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-sm align-middle m-0">
+              <thead class="table-secondary">
+                <tr>
+                  <th style="width:80px;">ID</th>
+                  <th>장비</th>
+                  <th>S/N</th>
+                  <th>대여자</th>
+                  <th>연락처(마스킹)</th>
+                  <th style="width:160px;">대여일시</th>
+                  <th style="width:120px;">반납</th>
+                </tr>
+              </thead>
+              <tbody>
+              {% for r in rentals %}
+                <tr>
+                  <td>{{ r.id }}</td>
+                  <td>{{ r.item_name }}</td>
+                  <td>{{ r.serial_no }}</td>
+                  <td>{{ r.user_name }}</td>
+                  <td>{{ r.phone_masked }}</td>
+                  <td>{{ r.rental_date }}</td>
+                  <td>
+                    <form method="post" action="{{ url_for('return_info_mark', rental_id=r.id) }}"
+                          onsubmit="return confirm('ID {{ r.id }} 장비를 반납 처리할까요?');">
+                      <!-- 사용자가 입력한 값(로그용)과 조회 복귀용 -->
+                      <input type="hidden" name="back_dept" value="{{ dept_input }}">
+                      <input type="hidden" name="returner_name" value="{{ user_name_input }}">
+                      <input type="hidden" name="returner_phone" value="{{ phone_input }}">
+                      <button class="btn btn-success btn-sm">
+                        <i class="bi bi-box-arrow-in-left me-1"></i>반납처리
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    {% elif dept_input %}
+      <div class="text-muted">표시할 미반납 데이터가 없습니다.</div>
+    {% endif %}
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 전화번호 자동 하이픈
+function formatPhone(input) {
+  let v = input.value.replace(/[^0-9]/g, '');
+  let r = '';
+  if (v.length < 4) r = v;
+  else if (v.length < 8) r = v.slice(0,3) + '-' + v.slice(3);
+  else r = v.slice(0,3) + '-' + v.slice(3,7) + '-' + v.slice(7,11);
+  input.value = r;
+}
+
+// 제출 전 형식 검증
+function validatePhone() {
+  const input = document.getElementById('phone');
+  let v = input.value.replace(/[^0-9]/g, '');
+  if (v.length !== 11) {
+    alert("연락처는 010-0000-0000 형식으로 입력해주세요.");
+    return false;
+  }
+  input.value = v.slice(0,3) + '-' + v.slice(3,7) + '-' + v.slice(7);
+  return true;
+}
+</script>
+{% endblock %}
