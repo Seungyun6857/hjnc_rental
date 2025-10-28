@@ -1795,7 +1795,7 @@ def get_shifts():
 
 
 # ---------------------------------------------------------------------
-# 근무자 + 일정 통합 등록 (제목 없으면 일정 추가 안 함)
+# 🧩 근무자 + 일정 통합 등록 (제목 없으면 일정 추가 안 함)
 # ---------------------------------------------------------------------
 @app.route("/add_shift_and_schedule", methods=["POST"])
 def add_shift_and_schedule():
@@ -1838,7 +1838,7 @@ def add_shift_and_schedule():
 
 
 # ---------------------------------------------------------------------
-# 일정 및 근무자 삭제 (id 없으면 day 기준으로 삭제)
+# 🗑️ 일정 및 근무자 삭제 (id 없으면 day 기준으로 삭제)
 # ---------------------------------------------------------------------
 @app.route("/delete_schedule", methods=["POST"])
 def delete_schedule():
@@ -1864,6 +1864,29 @@ def delete_schedule():
     except Exception as e:
         print("❌ delete_schedule error:", e)
         return jsonify({"status": "error", "error": str(e)})
+
+
+# ---------------------------------------------------------------------
+# 🗑️ 근무자 단독 삭제 (프론트에서 /delete_shift 호출용)
+# ---------------------------------------------------------------------
+@app.route("/delete_shift", methods=["POST"])
+def delete_shift():
+    """근무자 삭제 (근무자 이름만 지우기)"""
+    ensure_shift_table()
+    try:
+        data = request.get_json() or {}
+        day = data.get("day")
+        if not day:
+            return jsonify({"status": "error", "error": "날짜 누락"}), 400
+
+        with engine.begin() as conn:
+            conn.execute(text("DELETE FROM shifts WHERE day = :day"), {"day": day})
+
+        return jsonify({"status": "success"}), 200
+
+    except Exception as e:
+        print("❌ delete_shift error:", e)
+        return jsonify({"status": "error", "error": str(e)}), 500
 
 
 # ---------------------------------------------------------------------
