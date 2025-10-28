@@ -43,7 +43,6 @@
       margin: 10px 0 15px 0;
     }
 
-    /* ✅ 근무자 이름 스타일 */
     .shift-tag {
       position: absolute;
       top: 4px;
@@ -55,6 +54,7 @@
       background: rgba(255, 255, 255, 0.7);
       padding: 1px 3px;
       border-radius: 3px;
+      transition: background 0.2s;
     }
 
     .shift-tag:hover {
@@ -63,6 +63,11 @@
 
     .fc-daygrid-day-top {
       position: relative;
+    }
+
+    .fc-event-title {
+      font-size: 15px !important;
+      font-weight: 600;
     }
   </style>
 </head>
@@ -130,7 +135,10 @@
       try {
         const res = await fetch('/get_shifts');
         shiftData = res.ok ? await res.json() : {};
-      } catch { shiftData = {}; }
+      } catch {
+        shiftData = {};
+        console.warn('⚠️ 근무자 데이터 로드 실패');
+      }
     }
 
     // ✅ 월 제목 갱신
@@ -153,7 +161,6 @@
       height: 450,
       events: '/get_schedules',
 
-      // ✅ 날짜 클릭 시
       dateClick(info) {
         const day = info.dateStr;
         document.getElementById('modal_day').value = day;
@@ -162,21 +169,27 @@
         document.getElementById('modal_name').value = shiftData[day] || '';
         document.getElementById('modal_title').value = '';
         document.getElementById('modal_note').value = '';
-
-        // ✅ 근무자가 있으면 삭제 버튼 활성화
-        const btnDelete = document.getElementById('btnDeleteShift');
-        if (shiftData[day]) btnDelete.disabled = false;
-        else btnDelete.disabled = true;
-
         shiftModal.show();
       },
 
-      // ✅ 월 변경 시 제목 갱신
-      datesSet(info) {
+      eventClick(info) {
+        const event = info.event;
+        const day = event.startStr.slice(0, 10);
+
+        document.getElementById('modal_event_id').value = event.id || '';
+        document.getElementById('modal_day').value = day;
+        document.getElementById('modal_day_display').value = day;
+        document.getElementById('modal_name').value = shiftData[day] || '';
+        document.getElementById('modal_title').value = event.title || '';
+        document.getElementById('modal_note').value = event.extendedProps.note || '';
+        shiftModal.show();
+      },
+
+      datesSet() {
         updateMonthTitle(calendar.getDate());
       },
 
-      // ✅ 근무자 표시 (UTC → 현지 보정)
+      // ✅ 근무자 표시
       dayCellDidMount(arg) {
         const localDate = new Date(arg.date.getTime() - (arg.date.getTimezoneOffset() * 60000));
         const dayStr = localDate.toISOString().slice(0, 10);
@@ -186,23 +199,24 @@
           el.className = 'shift-tag';
           el.textContent = shiftData[dayStr];
 
-          // 🗑️ 클릭 시 삭제
           el.addEventListener('click', async (e) => {
             e.stopPropagation();
             if (!confirm(`"${shiftData[dayStr]}" 근무자 정보를 삭제하시겠습니까?`)) return;
             try {
-              await fetch('/delete_shift', {
+              const res = await fetch('/delete_shift', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ day: dayStr })
               });
-              alert('삭제 완료');
-              await loadShifts();
-              calendar.refetchEvents();
-              calendar.render();
-            } catch (e) {
-              console.error(e);
-              alert('삭제 실패');
+              const data = await res.json();
+              if (res.ok && (data.status === 'success' || data.ok)) {
+                await loadShifts();
+                calendar.rerenderDates();
+              } else {
+                console.error('삭제 실패:', data);
+              }
+            } catch (err) {
+              console.error('서버 삭제 요청 실패', err);
             }
           });
 
@@ -233,43 +247,51 @@
         });
         const data = await res.json();
 
-        if (data.ok) {
+        if (res.ok && data.ok) {
           alert('✅ 저장 완료!');
           shiftModal.hide();
           await loadShifts();
           calendar.refetchEvents();
-          calendar.render();
-        } else alert('❌ 저장 실패: ' + (data.error || '오류 발생'));
-      } catch (e) {
-        console.error(e);
-        alert('서버 오류 발생');
+          calendar.rerenderDates();
+        } else {
+          console.error('저장 실패 응답:', data);
+          alert('❌ 저장 실패: ' + (data?.error || '서버 응답 오류'));
+        }
+      } catch (err) {
+        console.error('서버 통신 중 오류:', err);
+        alert('서버와의 통신 중 문제가 발생했습니다.');
       }
     });
 
-    // ✅ 모달 내 삭제 버튼
+    // ✅ 삭제 버튼
     document.getElementById('btnDeleteShift').addEventListener('click', async () => {
+      const id = document.getElementById('modal_event_id').value;
       const day = document.getElementById('modal_day').value;
-      if (!day) return alert('삭제할 날짜를 선택하세요.');
-      if (!confirm(`${day}의 근무자 정보를 삭제하시겠습니까?`)) return;
+
+      if (!id && !day) return alert('삭제할 항목이 없습니다.');
+      if (!confirm('정말 삭제하시겠습니까?')) return;
 
       try {
-        const res = await fetch('/delete_shift', {
+        const res = await fetch('/delete_schedule', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ day })
+          body: JSON.stringify({ id, day })
         });
-
         const data = await res.json();
-        if (data.status === 'success' || data.ok) {
+
+        if (res.ok && (data.status === 'success' || data.ok)) {
           alert('🗑️ 삭제 완료!');
           shiftModal.hide();
           await loadShifts();
           calendar.refetchEvents();
-          calendar.render();
-        } else alert('삭제 실패: ' + (data.error || '알 수 없는 오류'));
-      } catch (e) {
-        console.error(e);
-        alert('서버 통신 오류');
+          calendar.rerenderDates();
+        } else {
+          console.error('삭제 실패 응답:', data);
+          alert('삭제 실패: ' + (data.error || '알 수 없는 오류'));
+        }
+      } catch (err) {
+        console.error('삭제 중 네트워크 오류:', err);
+        alert('서버 통신 오류가 발생했습니다.');
       }
     });
   });

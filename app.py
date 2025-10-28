@@ -12,6 +12,11 @@ from sqlalchemy import create_engine, text, bindparam
 from sqlalchemy.engine import Engine
 from dotenv import load_dotenv
 
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+
 # ---------------------------------------------------------------------
 # 앱/DB 기본 설정
 # ---------------------------------------------------------------------
@@ -1756,7 +1761,7 @@ def delete_manual_image():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 # ---------------------------------------------------------------------
-# 📅 캘린더 페이지 (근무자 + 일정 통합)
+# 📅 캘린더 페이지
 # ---------------------------------------------------------------------
 @app.route("/calendar")
 def calendar():
@@ -1795,7 +1800,7 @@ def get_shifts():
 
 
 # ---------------------------------------------------------------------
-# 🧩 근무자 + 일정 통합 등록 (제목 없으면 일정 추가 안 함)
+# 근무자 + 일정 통합 등록
 # ---------------------------------------------------------------------
 @app.route("/add_shift_and_schedule", methods=["POST"])
 def add_shift_and_schedule():
@@ -1808,37 +1813,46 @@ def add_shift_and_schedule():
     title = (data.get("title") or "").strip()
     note  = (data.get("note") or "").strip()
 
+    print("📥 요청 데이터:", data)  # ✅ 요청 내용 확인 로그
+
     if not day:
+        print("❌ day 누락됨")
         return jsonify({"ok": False, "error": "날짜 누락"}), 400
     if not name and not title:
+        print("❌ name, title 누락됨")
         return jsonify({"ok": False, "error": "근무자 또는 일정 제목 중 하나는 필요"}), 400
 
     try:
         with engine.begin() as conn:
-            # ✅ 근무자 이름 저장 (항상)
+            # ✅ 근무자 등록
             if name:
+                print("🧾 근무자 추가:", name, "(", day, ")")
                 conn.execute(text("""
                     INSERT INTO shifts (day, name)
                     VALUES (:day, :name)
-                    ON CONFLICT(day) DO UPDATE SET name = :name
+                    ON CONFLICT(day) DO UPDATE SET name = excluded.name
                 """), {"day": day, "name": name})
 
-            # ✅ 일정 제목이 있을 때만 일정 테이블에 추가
+            # ✅ 일정 등록
             if title:
+                print("🧾 일정 추가:", title)
                 conn.execute(text("""
                     INSERT INTO schedules (title, start, end, note)
                     VALUES (:title, :start, :end, :note)
                 """), {"title": title, "start": day, "end": day, "note": note})
 
+        print("✅ DB 삽입 완료")
         return jsonify({"ok": True, "message": "등록 완료"})
 
     except Exception as e:
+        import traceback
         print("❌ add_shift_and_schedule error:", e)
+        traceback.print_exc()
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # ---------------------------------------------------------------------
-# 🗑️ 일정 및 근무자 삭제 (id 없으면 day 기준으로 삭제)
+# 일정 및 근무자 삭제
 # ---------------------------------------------------------------------
 @app.route("/delete_schedule", methods=["POST"])
 def delete_schedule():
@@ -1851,49 +1865,35 @@ def delete_schedule():
 
     try:
         with engine.begin() as conn:
-            # ✅ 일정이 존재하는 경우
+            deleted = False
+
+            # ✅ 일정 삭제
             if schedule_id:
-                conn.execute(text("DELETE FROM schedules WHERE id = :id"), {"id": schedule_id})
+                res = conn.exec_driver_sql("DELETE FROM schedules WHERE id = ?", (schedule_id,))
+                if res.rowcount > 0:
+                    deleted = True
 
-            # ✅ 근무자만 있는 경우(day 기준)
+            # ✅ 근무자 삭제
             if day:
-                conn.execute(text("DELETE FROM shifts WHERE day = :day"), {"day": day})
+                res2 = conn.exec_driver_sql("DELETE FROM shifts WHERE day = ?", (day,))
+                if res2.rowcount > 0:
+                    deleted = True
 
-        return jsonify({"status": "success"})
-
-    except Exception as e:
-        print("❌ delete_schedule error:", e)
-        return jsonify({"status": "error", "error": str(e)})
-
-
-# ---------------------------------------------------------------------
-# 🗑️ 근무자 단독 삭제 (프론트에서 /delete_shift 호출용)
-# ---------------------------------------------------------------------
-@app.route("/delete_shift", methods=["POST"])
-def delete_shift():
-    """근무자 삭제 (근무자 이름만 지우기)"""
-    ensure_shift_table()
-    try:
-        data = request.get_json() or {}
-        day = data.get("day")
-        if not day:
-            return jsonify({"status": "error", "error": "날짜 누락"}), 400
-
-        with engine.begin() as conn:
-            conn.execute(text("DELETE FROM shifts WHERE day = :day"), {"day": day})
-
-        return jsonify({"status": "success"}), 200
+        if deleted:
+            return jsonify({"status": "success"})
+        else:
+            return jsonify({"status": "error", "error": "삭제 대상 없음"})
 
     except Exception as e:
-        print("❌ delete_shift error:", e)
+        import traceback
+        traceback.print_exc()
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
 # ---------------------------------------------------------------------
-# 🧱 테이블 자동 생성 유틸리티
+# 🧱 테이블 자동 생성
 # ---------------------------------------------------------------------
 def ensure_tables():
-    """schedules 테이블 자동 생성"""
     with engine.begin() as conn:
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS schedules (
@@ -1907,7 +1907,6 @@ def ensure_tables():
 
 
 def ensure_shift_table():
-    """shifts 테이블 자동 생성"""
     with engine.begin() as conn:
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS shifts (
