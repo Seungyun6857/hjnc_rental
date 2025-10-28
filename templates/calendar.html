@@ -1,179 +1,268 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <title>캘린더</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8">
+  <title>근무 캘린더</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <!-- Bootstrap / FullCalendar -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css" rel="stylesheet">
 
   <style>
-    html, body { margin:0; padding:0; font-family:'Pretendard',sans-serif; background:#fff; }
-    #calendar { max-width:100%; height:450px; margin:0 auto; }
-    .fc-daygrid-day:hover { background:#f1f3f5; cursor:pointer; }
-    .fc-day-today { background:#ffeaa7 !important; }
-    .fc-toolbar { display:none !important; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Pretendard', sans-serif;
+      background: #fff;
+    }
 
-    /* ✅ 날짜 숫자는 보이게 유지 (이전의 .fc-daygrid-day-top {display:none} 제거) */
-    .fc .fc-highlight { background:none !important; }
-    .fc-daygrid-day-frame:focus { outline:none !important; }
+    #calendar {
+      max-width: 100%;
+      height: 450px;
+      margin: 0 auto;
+    }
+
+    .fc-daygrid-day:hover {
+      background: #f1f3f5;
+      cursor: pointer;
+    }
+
+    .fc-day-today {
+      background: #ffeaa7 !important;
+    }
+
+    .fc-toolbar {
+      display: none !important;
+    }
+
+    /* 상단 제목 */
+    #monthTitle {
+      font-size: 1.25rem;
+      font-weight: 600;
+      text-align: center;
+      margin: 20px 0 10px 0;
+    }
+
+    /* 근무자 이름 표시 (날짜 왼쪽 정렬) */
+    .shift-tag {
+      display: inline-block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #2c3e50;
+      margin-right: 4px;
+      float: left;
+    }
   </style>
 </head>
 <body>
+
+  <!-- 📅 상단에 현재 년·월 표시 -->
+  <div id="monthTitle">로딩 중...</div>
   <div id="calendar"></div>
 
+  <!-- 📌 근무자 / 일정 추가 모달 -->
+  <div class="modal fade" id="shiftModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title">근무자 / 일정 관리</h5>
+          <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body">
+          <input type="hidden" id="modal_day">
+          <input type="hidden" id="modal_event_id">
+
+          <div class="mb-3">
+            <label class="form-label">날짜</label>
+            <input type="text" id="modal_day_display" class="form-control" readonly>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">근무자 이름</label>
+            <input type="text" id="modal_name" class="form-control" placeholder="예: 박, 이, 문">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">일정 제목</label>
+            <input type="text" id="modal_title" class="form-control" placeholder="예: 회의, 점검, 야간근무 등">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">메모</label>
+            <textarea id="modal_note" class="form-control" rows="3" placeholder="추가 설명 입력 (선택)"></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-danger me-auto" id="btnDeleteShift" style="display:none;">삭제</button>
+          <button class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+          <button class="btn btn-primary" id="btnSaveShift">저장</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const calendarEl = document.getElementById('calendar');
-      const PARENT_ORIGIN = window.location.origin;
+  document.addEventListener('DOMContentLoaded', async () => {
+    const calendarEl = document.getElementById('calendar');
+    const monthTitle = document.getElementById('monthTitle');
+    const shiftModal = new bootstrap.Modal(document.getElementById('shiftModal'));
+    let shiftData = {};
 
-      const calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',
-        initialDate: new Date(),
-        locale: 'ko',
-        headerToolbar: false,
-        height: 450,
-        selectable: false,
-        editable: true,
+    // ✅ 근무자 데이터 불러오기
+    async function loadShifts() {
+      try {
+        const res = await fetch('/get_shifts');
+        shiftData = res.ok ? await res.json() : {};
+      } catch { shiftData = {}; }
+    }
 
-        // 제목만 보이게(시간 텍스트 숨김)
-        displayEventTime: false,
+    // ✅ 월 표시 갱신
+    function updateMonthTitle(date) {
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      monthTitle.textContent = `${year}년 ${month}월`;
+    }
 
-        // 서버에서 일정 로드(가능하면 start/end는 YYYY-MM-DD로 내려주세요)
-        events: '/get_schedules',
+    // ✅ FullCalendar 초기화
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+      initialView: 'dayGridMonth',
+      initialDate: new Date(), // ✅ 오늘 날짜 기준으로 표시
+      nowIndicator: true,      // 오늘 빨간선 표시
+      locale: 'ko',
+      displayEventTime: false,
+      selectable: true,
+      height: 450,
+      events: '/get_schedules',
 
-        dateClick(info) {
-          window.parent.postMessage({ type:'openScheduleModal', start: info.dateStr }, PARENT_ORIGIN);
-        },
+      // 날짜 클릭 시
+      async dateClick(info) {
+        const day = info.dateStr;
+        document.getElementById('modal_day').value = day;
+        document.getElementById('modal_day_display').value = day;
+        document.getElementById('modal_event_id').value = '';
+        document.getElementById('modal_name').value = shiftData[day] || '';
+        document.getElementById('modal_title').value = '';
+        document.getElementById('modal_note').value = '';
+        document.getElementById('btnDeleteShift').style.display = 'none';
+        shiftModal.show();
+      },
 
-        eventClick(info) {
-          window.parent.postMessage({
-            type: 'editScheduleModal',
-            id: info.event.id,
-            title: info.event.title,
-            start: info.event.startStr,
-            end: info.event.endStr,
-            note: info.event.extendedProps?.note || ''
-          }, PARENT_ORIGIN);
-        },
+      // 일정 클릭 시
+      eventClick(info) {
+        const event = info.event;
+        const day = event.startStr.slice(0, 10);
 
-        datesSet() {
-          const d = calendar.getDate();
-          window.parent.postMessage({
-            type:'updateCurrentDate',
-            dateText:`${d.getFullYear()}년 ${d.getMonth()+1}월`
-          }, PARENT_ORIGIN);
-        }
-      });
+        document.getElementById('modal_day').value = day;
+        document.getElementById('modal_day_display').value = day;
+        document.getElementById('modal_event_id').value = event.id;
+        document.getElementById('modal_name').value = shiftData[day] || '';
+        document.getElementById('modal_title').value = event.title || '';
+        document.getElementById('modal_note').value = event.extendedProps.note || '';
+        document.getElementById('btnDeleteShift').style.display = 'inline-block';
+        shiftModal.show();
+      },
 
-      calendar.render();
-      window.calendar = calendar;
+      // 월 변경 시 상단 표시 갱신
+      datesSet(info) {
+        updateMonthTitle(info.start);
+      },
 
-      // 부모 창 메시지 수신
-      window.addEventListener('message', async (event) => {
-        if (event.origin !== PARENT_ORIGIN) return;
-        const data = event.data || {};
-
-        // 네비게이션
-        if (data.type === 'calendarNav') {
-          if (data.command === 'today') calendar.today();
-          else if (data.command === 'prev') calendar.prev();
-          else if (data.command === 'next') calendar.next();
-
-          const d = calendar.getDate();
-          window.parent.postMessage({ type:'updateCurrentDate', dateText:`${d.getFullYear()}년 ${d.getMonth()+1}월` }, PARENT_ORIGIN);
-          return;
-        }
-
-        // 추가/수정: 모두 막대 표시(allDay), 날짜만 사용
-        if (data.type === 'addEvent') {
-          try {
-            const toDateOnly = v => (v || '').slice(0,10);
-            const payload = {
-              title: (data.title || '').trim() || '제목 없음',
-              start: toDateOnly(data.start),
-              end:   toDateOnly(data.end),
-              note:  data.note ?? ''
-            };
-
-            if (data.id) {
-              // 수정
-              const res = await fetch('/update_schedule', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: data.id, ...payload })
-              });
-              const raw = await res.text();
-              if (!res.ok) { console.error('update_schedule error:', res.status, raw); throw new Error('update failed'); }
-
-              const ev = calendar.getEventById(data.id);
-              if (ev) {
-                ev.setProp('title', payload.title);
-                ev.setStart(payload.start);
-                ev.setEnd(payload.end);
-                ev.setAllDay(true);
-                ev.setExtendedProp('note', payload.note);
-              } else {
-                calendar.addEvent({
-                  id: String(data.id),
-                  title: payload.title,
-                  start: payload.start,
-                  end: payload.end,
-                  allDay: true,
-                  extendedProps: { note: payload.note }
-                });
-              }
-            } else {
-              // 신규
-              const res = await fetch('/add_schedule', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-              });
-              const raw = await res.text();
-              if (!res.ok) { console.error('add_schedule error:', res.status, raw); throw new Error('add failed'); }
-              let json; try { json = JSON.parse(raw); } catch(e) { console.error('Invalid JSON:', raw); throw e; }
-              if (!json || typeof json.id === 'undefined') { console.error('No id in response', json); throw new Error('no id'); }
-
-              calendar.addEvent({
-                id: String(json.id),
-                title: payload.title,
-                start: payload.start,
-                end: payload.end,
-                allDay: true,
-                extendedProps: { note: payload.note }
-              });
-            }
-          } catch (err) {
-            console.error(err);
-            alert('일정 저장에 실패했습니다. (콘솔 확인)');
+      // 근무자 표시
+      dayCellDidMount(arg) {
+        const dayStr = arg.date.toISOString().slice(0, 10);
+        if (shiftData[dayStr]) {
+          const el = document.createElement('span');
+          el.className = 'shift-tag';
+          el.textContent = shiftData[dayStr];
+          const topEl = arg.el.querySelector('.fc-daygrid-day-top');
+          if (topEl) {
+            topEl.insertBefore(el, topEl.firstChild); // 날짜 왼쪽에 표시
           }
-          return;
         }
-
-        // 삭제
-        if (data.type === 'deleteEvent') {
-          try {
-            const res = await fetch('/delete_schedule', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ id: data.id })
-            });
-            const raw = await res.text();
-            if (!res.ok) { console.error('delete_schedule error:', res.status, raw); throw new Error('delete failed'); }
-            const ev = calendar.getEventById(data.id);
-            if (ev) ev.remove();
-          } catch (err) {
-            console.error(err);
-            alert('일정 삭제에 실패했습니다.');
-          }
-          return;
-        }
-      });
+      }
     });
+
+    await loadShifts();
+    calendar.render();
+
+    // ✅ 저장 버튼
+    document.getElementById('btnSaveShift').addEventListener('click', async () => {
+      const day = document.getElementById('modal_day').value;
+      const name = document.getElementById('modal_name').value.trim();
+      const title = document.getElementById('modal_title').value.trim();
+      const note = document.getElementById('modal_note').value.trim();
+
+      if (!day) return alert('날짜를 선택하세요.');
+      if (!name && !title) return alert('근무자 이름 또는 일정 제목을 입력하세요.');
+
+      try {
+        const res = await fetch('/add_shift_and_schedule', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ day, name, title, note })
+        });
+        const data = await res.json();
+
+        if (data.ok) {
+          alert('✅ 저장 완료!');
+          shiftModal.hide();
+          await loadShifts();
+          calendar.refetchEvents();
+          calendar.render();
+        } else alert('❌ 저장 실패: ' + (data.error || '오류 발생'));
+      } catch (e) {
+        console.error(e);
+        alert('서버 오류 발생');
+      }
+    });
+
+    // ✅ 삭제 버튼
+    document.getElementById('btnDeleteShift').addEventListener('click', async () => {
+      const id = document.getElementById('modal_event_id').value;
+      const day = document.getElementById('modal_day').value;
+      if (!id && !day) return alert('삭제할 항목을 선택하세요.');
+
+      if (!confirm('정말 삭제하시겠습니까?')) return;
+
+      try {
+        // 일정 삭제
+        if (id) {
+          const res = await fetch('/delete_schedule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id })
+          });
+          const data = await res.json();
+          if (data.status !== 'success') throw new Error(data.error || '삭제 실패');
+        }
+
+        // 근무자 삭제
+        if (day) {
+          await fetch('/delete_shift', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ day })
+          });
+        }
+
+        alert('🗑️ 삭제 완료');
+        shiftModal.hide();
+        await loadShifts();
+        calendar.refetchEvents();
+        calendar.render();
+      } catch (e) {
+        console.error(e);
+        alert('삭제 중 오류 발생: ' + e.message);
+      }
+    });
+  });
   </script>
 </body>
 </html>

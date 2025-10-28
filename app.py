@@ -633,17 +633,41 @@ def return_done():
 @app.route("/admin_login", methods=["GET", "POST"])
 def admin_login():
     if request.method == "POST":
-        if request.form.get("username") == "admin" and request.form.get("password") == "1234":
-            session["admin_logged_in"] = True
-            session["admin_info"] = {"name": "이승윤", "position": "주임", "dept": "인프라서비스팀"}
-            return redirect("/admin_menu")
-        return render_template("admin_login.html", error="아이디 또는 비밀번호가 틀렸습니다.")
+        username = request.form.get("username")
+        password = request.form.get("password")
+
+        with engine.connect() as conn:
+            # employees 테이블에서 이름과 비밀번호 확인
+            user = conn.execute(text("""
+                SELECT id, name, dept_id, rank_id, password
+                FROM employees
+                WHERE name = :username
+            """), {"username": username}).mappings().first()
+
+            if user and user.get("password") == password:
+                # 로그인 성공 시 세션 저장
+                session["admin_logged_in"] = True
+                session["user_id"] = user["id"]
+                session["admin_info"] = {
+                    "name": user["name"],
+                    "dept": f"부서ID {user['dept_id']}",
+                    "position": f"직급ID {user['rank_id']}"
+                }
+                flash(f"{user['name']}님 환영합니다.", "success")
+                return redirect("/admin_menu")
+            else:
+                flash("아이디 또는 비밀번호가 잘못되었습니다.", "danger")
+                return render_template("admin_login.html")
+
     return render_template("admin_login.html")
+
 
 @app.route("/admin_logout")
 def admin_logout():
     session.clear()
+    flash("로그아웃되었습니다.", "info")
     return redirect("/")
+
 
 @app.route("/admin_menu")
 def admin_menu():
@@ -660,7 +684,6 @@ def admin_menu():
         """)).mappings().all()
         posts = [dict(r) for r in rows]
 
-    # 전자결재 제거: 템플릿 호환을 위해 더미 값 제공
     approvals_counts = {"대기": 0, "진행": 0, "반려": 0, "완료": 0}
     approvals_recent = []
 
@@ -672,6 +695,46 @@ def admin_menu():
         approvals_recent=approvals_recent,
     )
 
+
+# -------------------------------
+# 비밀번호 변경 (POST 요청)
+# -------------------------------
+@app.route('/change_password', methods=['POST'])
+def change_password():
+    current_pw = request.form.get('current_password')
+    new_pw = request.form.get('new_password')
+    confirm_pw = request.form.get('confirm_password')
+
+    if not session.get('admin_logged_in'):
+        flash('로그인이 필요합니다.', 'warning')
+        return redirect(url_for('admin_login'))
+
+    if not current_pw or not new_pw or not confirm_pw:
+        flash('모든 항목을 입력해주세요.', 'warning')
+        return redirect(url_for('admin_menu'))
+
+    if new_pw != confirm_pw:
+        flash('새 비밀번호가 일치하지 않습니다.', 'danger')
+        return redirect(url_for('admin_menu'))
+
+    with engine.connect() as conn:
+        user = conn.execute(text("SELECT * FROM employees WHERE id = :id"),
+                            {'id': session.get('user_id')}).mappings().first()
+
+        if not user:
+            flash('사용자 정보를 찾을 수 없습니다.', 'danger')
+            return redirect(url_for('admin_menu'))
+
+        if user.get('password') != current_pw:
+            flash('기존 비밀번호가 올바르지 않습니다.', 'danger')
+            return redirect(url_for('admin_menu'))
+
+        conn.execute(text("UPDATE employees SET password = :pw WHERE id = :id"),
+                     {'pw': new_pw, 'id': user['id']})
+        conn.commit()
+
+    flash('비밀번호가 성공적으로 변경되었습니다.', 'success')
+    return redirect(url_for('admin_menu'))
 
 # ---------------------------------------------------------------------
 # 장비 재고(관리)
@@ -1599,76 +1662,236 @@ def manual_item_delete(sec_id, item_id):
         save_manual_data(manual)
     return redirect(url_for("admin_manual"))
 
+# ---------------------------------------------------------------------
+# 메뉴얼 이미지 업로드 / 목록 / 삭제
+# ---------------------------------------------------------------------
+import uuid
+from werkzeug.utils import secure_filename
+
+@app.route("/admin/manuals/upload_images", methods=["POST"])
+def upload_manual_images():
+    try:
+        files = request.files.getlist("files[]")
+        target_dir = request.form.get("target_dir", "").strip()
+        if not files:
+            return jsonify({"ok": False, "error": "no files"})
+
+        base_dir = os.path.join(current_app.static_folder, "manual")
+        os.makedirs(base_dir, exist_ok=True)
+        save_dir = os.path.join(base_dir, target_dir) if target_dir else base_dir
+        os.makedirs(save_dir, exist_ok=True)
+
+        saved_urls = []
+        allowed_ext = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+
+        for f in files:
+            orig_name = f.filename
+            if not orig_name:
+                continue
+
+            ext = os.path.splitext(orig_name)[1].lower()
+            if ext not in allowed_ext:
+                print(f"[SKIP] Unsupported extension: {ext}")
+                continue
+
+            # 🔧 파일명에 한글이 포함되어도 UUID로 안전하게 저장
+            unique_name = f"{uuid.uuid4().hex}{ext}"
+
+            try:
+                file_path = os.path.join(save_dir, unique_name)
+                f.save(file_path)
+            except Exception as e:
+                print(f"[SAVE ERROR] {orig_name} -> {e}")
+                continue
+
+            rel_path = os.path.relpath(file_path, current_app.static_folder)
+            saved_urls.append(url_for("static", filename=rel_path.replace("\\", "/")))
+
+        rel_dir = os.path.relpath(save_dir, current_app.static_folder).replace("\\", "/")
+        return jsonify({"ok": True, "dir": rel_dir, "files": saved_urls})
+
+    except Exception as e:
+        print("[UPLOAD ERROR]", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/admin/manuals/list_images")
+def list_manual_images():
+    try:
+        rel_dir = request.args.get("dir", "").strip().lstrip("/\\")
+        base_dir = os.path.join(current_app.static_folder, rel_dir)
+        if not os.path.isdir(base_dir):
+            return jsonify({"ok": True, "files": []})
+
+        files = []
+        for fn in sorted(os.listdir(base_dir)):
+            ext = os.path.splitext(fn)[1].lower()
+            if ext in [".jpg", ".jpeg", ".png", ".gif", ".webp"]:
+                files.append({
+                    "name": fn,
+                    "url": url_for("static", filename=f"{rel_dir}/{fn}".replace("\\", "/"))
+                })
+        return jsonify({"ok": True, "files": files})
+
+    except Exception as e:
+        print("[LIST ERROR]", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/admin/manuals/delete_image", methods=["POST"])
+def delete_manual_image():
+    try:
+        data = request.get_json(force=True)
+        rel_dir = data.get("dir", "").strip().lstrip("/\\")
+        name = data.get("name")
+        if not name:
+            return jsonify({"ok": False, "error": "no filename"})
+        base_dir = os.path.join(current_app.static_folder, rel_dir)
+        file_path = os.path.join(base_dir, name)
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+        return jsonify({"ok": True})
+    except Exception as e:
+        print("[DELETE ERROR]", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 # ---------------------------------------------------------------------
-# 캘린더
+# 📅 캘린더 페이지 (근무자 + 일정 통합)
 # ---------------------------------------------------------------------
 @app.route("/calendar")
 def calendar():
+    """캘린더 페이지 렌더링"""
     return render_template("calendar.html")
 
+
+# ---------------------------------------------------------------------
+# 📤 일정 데이터 불러오기
+# ---------------------------------------------------------------------
 @app.route("/get_schedules")
 def get_schedules():
+    """FullCalendar 일정 데이터 로드"""
     ensure_tables()
     with engine.connect() as conn:
-        rows = conn.execute(text("SELECT id, title, start, end, COALESCE(note, '') FROM schedules")).all()
-    return jsonify([{"id": r[0], "title": r[1], "start": r[2], "end": r[3], "note": r[4]} for r in rows])
+        rows = conn.execute(text("""
+            SELECT id, title, start, end, COALESCE(note, '') AS note
+            FROM schedules
+        """)).all()
+    return jsonify([
+        {"id": r[0], "title": r[1], "start": r[2], "end": r[3], "note": r[4]}
+        for r in rows
+    ])
 
-@app.route("/add_schedule", methods=["POST"])
-def add_schedule():
+
+# ---------------------------------------------------------------------
+# 👤 근무자 데이터 불러오기
+# ---------------------------------------------------------------------
+@app.route("/get_shifts")
+def get_shifts():
+    """근무자 데이터 로드"""
+    ensure_shift_table()
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT day, name FROM shifts")).all()
+    return jsonify({r[0]: r[1] for r in rows})
+
+
+# ---------------------------------------------------------------------
+# 근무자 + 일정 통합 등록 (제목 없으면 일정 추가 안 함)
+# ---------------------------------------------------------------------
+@app.route("/add_shift_and_schedule", methods=["POST"])
+def add_shift_and_schedule():
+    ensure_shift_table()
     ensure_tables()
+
     data = request.get_json() or {}
-    title = (data.get("title") or "").strip() or "제목 없음"
-    start = (data.get("start") or "").strip()
-    end   = (data.get("end") or "").strip() or start
-    note  = data.get("note", "")
-    if not start:
-        return jsonify({"status": "error", "message": "start is required"}), 400
+    day   = (data.get("day") or "").strip()
+    name  = (data.get("name") or "").strip()
+    title = (data.get("title") or "").strip()
+    note  = (data.get("note") or "").strip()
 
-    with engine.begin() as conn:
-        row = conn.execute(text(
-            "INSERT INTO schedules (title, start, end, note) VALUES (:title, :start, :end, :note) RETURNING id"
-            if is_postgres() else
-            "INSERT INTO schedules (title, start, end, note) VALUES (:title, :start, :end, :note)"
-        ), {"title": title, "start": start, "end": end, "note": note})
+    if not day:
+        return jsonify({"ok": False, "error": "날짜 누락"}), 400
+    if not name and not title:
+        return jsonify({"ok": False, "error": "근무자 또는 일정 제목 중 하나는 필요"}), 400
 
-        if is_postgres():
-            sid = row.mappings().first()["id"]
-        else:
-            sid = conn.execute(text("SELECT last_insert_rowid()")).scalar_one()
+    try:
+        with engine.begin() as conn:
+            # ✅ 근무자 이름 저장 (항상)
+            if name:
+                conn.execute(text("""
+                    INSERT INTO shifts (day, name)
+                    VALUES (:day, :name)
+                    ON CONFLICT(day) DO UPDATE SET name = :name
+                """), {"day": day, "name": name})
 
-    return jsonify({"status": "success", "id": sid})
+            # ✅ 일정 제목이 있을 때만 일정 테이블에 추가
+            if title:
+                conn.execute(text("""
+                    INSERT INTO schedules (title, start, end, note)
+                    VALUES (:title, :start, :end, :note)
+                """), {"title": title, "start": day, "end": day, "note": note})
 
-@app.route("/update_schedule", methods=["POST"])
-def update_schedule():
-    ensure_tables()
-    data = request.get_json() or {}
-    sid   = data.get("id")
-    title = (data.get("title") or "").strip() or "제목 없음"
-    start = (data.get("start") or "").strip()
-    end   = (data.get("end") or "").strip() or start
-    note  = data.get("note", "")
-    if not sid:
-        return jsonify({"status": "error", "message": "id required"}), 400
-    if not start:
-        return jsonify({"status": "error", "message": "start is required"}), 400
+        return jsonify({"ok": True, "message": "등록 완료"})
 
-    with engine.begin() as conn:
-        conn.execute(text("""
-            UPDATE schedules SET title=:title, start=:start, end=:end, note=:note WHERE id=:id
-        """), {"title": title, "start": start, "end": end, "note": note, "id": sid})
-    return jsonify({"status": "success"})
+    except Exception as e:
+        print("❌ add_shift_and_schedule error:", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
 
+
+# ---------------------------------------------------------------------
+# 일정 및 근무자 삭제 (id 없으면 day 기준으로 삭제)
+# ---------------------------------------------------------------------
 @app.route("/delete_schedule", methods=["POST"])
 def delete_schedule():
-    ensure_tables()
     data = request.get_json() or {}
-    sid = data.get("id")
-    if not sid:
-        return jsonify({"status": "error", "message": "id required"}), 400
+    schedule_id = data.get("id")
+    day = data.get("day")
+
+    if not schedule_id and not day:
+        return jsonify({"status": "error", "error": "id 또는 day 누락"})
+
+    try:
+        with engine.begin() as conn:
+            # ✅ 일정이 존재하는 경우
+            if schedule_id:
+                conn.execute(text("DELETE FROM schedules WHERE id = :id"), {"id": schedule_id})
+
+            # ✅ 근무자만 있는 경우(day 기준)
+            if day:
+                conn.execute(text("DELETE FROM shifts WHERE day = :day"), {"day": day})
+
+        return jsonify({"status": "success"})
+
+    except Exception as e:
+        print("❌ delete_schedule error:", e)
+        return jsonify({"status": "error", "error": str(e)})
+
+
+# ---------------------------------------------------------------------
+# 🧱 테이블 자동 생성 유틸리티
+# ---------------------------------------------------------------------
+def ensure_tables():
+    """schedules 테이블 자동 생성"""
     with engine.begin() as conn:
-        conn.execute(text("DELETE FROM schedules WHERE id=:id"), {"id": sid})
-    return jsonify({"status": "success"})
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS schedules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                start TEXT NOT NULL,
+                end TEXT NOT NULL,
+                note TEXT
+            )
+        """))
+
+
+def ensure_shift_table():
+    """shifts 테이블 자동 생성"""
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS shifts (
+                day TEXT PRIMARY KEY,
+                name TEXT NOT NULL
+            )
+        """))
 
 
 # =====================================================================
@@ -1769,4 +1992,4 @@ ensure_tables()
 print("DB URL:", DATABASE_URL)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)

@@ -394,266 +394,251 @@
   }
 
   /* 이미지 격자 - 높이 제한 + 비율 유지 */
-  .step-img{
-    width:100%;
-    max-height:320px;     /* 필요시 280~380px로 조절 */
-    object-fit:contain;   /* 비율 유지 */
-    background:#f7f7f9;
+  .step-img {
+    width: 100%;
+    max-height: 320px; /* 필요시 280~380px로 조절 */
+    object-fit: contain; /* 비율 유지 */
+    background: #f7f7f9;
   }
-  .step-figure { overflow:hidden; position:relative; }
-  .step-badge{
-    position:absolute; top:8px; left:8px;
-    width:36px; height:36px; border-radius:50%;
-    display:flex; align-items:center; justify-content:center;
-    font-weight:700; font-size:14px;
-    background:#0d6efd; color:#fff;
-    box-shadow:0 2px 6px rgba(0,0,0,.15);
+
+  .step-figure { overflow: hidden; position: relative; }
+
+  .step-badge {
+    position: absolute;
+    top: 8px; left: 8px;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px;
+    background: #0d6efd; color: #fff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .15);
   }
 
   /* 하단 단계 리스트 (번호 + 텍스트) */
-  .step-list{
-    list-style:none; margin:0; padding:0;
-    display:flex; flex-direction:column; gap:.5rem;
+  .step-list {
+    list-style: none; margin: 0; padding: 0;
+    display: flex; flex-direction: column; gap: .5rem;
   }
-  .step-list > li{
-    display:flex; gap:.75rem; align-items:flex-start;
-    background:#fafafa; border:1px solid #eee; border-radius:.5rem;
-    padding:.5rem .75rem;
+  .step-list > li {
+    display: flex; gap: .75rem; align-items: flex-start;
+    background: #fafafa; border: 1px solid #eee; border-radius: .5rem;
+    padding: .5rem .75rem;
   }
-  .step-num{
-    min-width:28px; height:28px; border-radius:50%;
-    background:#0d6efd; color:#fff; font-weight:700;
-    display:flex; align-items:center; justify-content:center;
-    margin-top:.15rem; font-size:13px;
+  .step-num {
+    min-width: 28px; height: 28px; border-radius: 50%;
+    background: #0d6efd; color: #fff; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    margin-top: .15rem; font-size: 13px;
   }
-  .step-text{ flex:1; }
+  .step-text { flex: 1; }
 
   /* 편집 모달 썸네일 */
   .thumb {
-    width: 120px; height: 90px; object-fit: cover;
-    border: 1px solid #e5e7eb; border-radius: 8px;
+    width: 120px; height: 90px;
+    object-fit: cover;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
   }
 </style>
 
 <script>
-  // 검색
+  /* ======================== 메뉴얼 검색 ======================== */
   (function () {
-    const input = document.getElementById('manualSearch');
-    const items = Array.from(document.querySelectorAll('.manual-item'));
+    const input = document.getElementById("manualSearch");
+    const items = Array.from(document.querySelectorAll(".manual-item"));
     if (!input) return;
-    input.addEventListener('input', () => {
+    input.addEventListener("input", () => {
       const q = input.value.trim().toLowerCase();
       items.forEach(it => {
         const hay = (
-          (it.dataset.title || '') + ' ' +
-          (it.dataset.desc || '') + ' ' +
-          (it.dataset.actions || '') + ' ' +
-          (it.dataset.contacts || '')
+          (it.dataset.title || "") + " " +
+          (it.dataset.desc || "") + " " +
+          (it.dataset.actions || "") + " " +
+          (it.dataset.contacts || "")
         ).toLowerCase();
-        it.style.display = (q === '' || hay.includes(q)) ? '' : 'none';
+        it.style.display = (q === "" || hay.includes(q)) ? "" : "none";
       });
     });
   })();
 
-  // 전체 펼치기/접기
+  /* ======================== 전체 펼치기 / 접기 ======================== */
   (function () {
-    const expandBtn = document.getElementById('btnExpandAll');
-    const collapseBtn = document.getElementById('btnCollapseAll');
-    const acc = document.getElementById('manualAccordion');
+    const expandBtn = document.getElementById("btnExpandAll");
+    const collapseBtn = document.getElementById("btnCollapseAll");
+    const acc = document.getElementById("manualAccordion");
     if (!acc) return;
     function setAll(show) {
-      acc.querySelectorAll('.accordion-collapse').forEach(el => {
-        const inst = bootstrap.Collapse.getOrCreateInstance(el, { toggle:false });
+      acc.querySelectorAll(".accordion-collapse").forEach(el => {
+        const inst = bootstrap.Collapse.getOrCreateInstance(el, { toggle: false });
         show ? inst.show() : inst.hide();
       });
     }
-    expandBtn?.addEventListener('click', () => setAll(true));
-    collapseBtn?.addEventListener('click', () => setAll(false));
+    expandBtn?.addEventListener("click", () => setAll(true));
+    collapseBtn?.addEventListener("click", () => setAll(false));
   })();
 
-  // 섹션 수정 모달 채우기
-  const modalSectionEdit = document.getElementById('modalSectionEdit');
-  modalSectionEdit?.addEventListener('show.bs.modal', (ev) => {
+  /* ======================== 섹션 수정 모달 ======================== */
+  const modalSectionEdit = document.getElementById("modalSectionEdit");
+  modalSectionEdit?.addEventListener("show.bs.modal", (ev) => {
     const btn = ev.relatedTarget;
-    const secId = btn.getAttribute('data-sec-id');
-    const secTitle = btn.getAttribute('data-sec-title');
-    modalSectionEdit.querySelector('#secEditId').value = secId;
-    modalSectionEdit.querySelector('#secEditTitle').value = secTitle;
-    const form = document.getElementById('formSectionEdit');
+    const secId = btn.getAttribute("data-sec-id");
+    const secTitle = btn.getAttribute("data-sec-title");
+    modalSectionEdit.querySelector("#secEditId").value = secId;
+    modalSectionEdit.querySelector("#secEditTitle").value = secTitle;
+    const form = document.getElementById("formSectionEdit");
     form.action = `/admin/manual/section/${encodeURIComponent(secId)}/update`;
   });
 
-  // 항목 추가 모달: 섹션 id 주입 + 프리뷰 초기화
-  const modalItemAdd = document.getElementById('modalItemAdd');
-  modalItemAdd?.addEventListener('show.bs.modal', (ev) => {
+  /* ======================== 항목 추가 모달 ======================== */
+  const modalItemAdd = document.getElementById("modalItemAdd");
+  modalItemAdd?.addEventListener("show.bs.modal", (ev) => {
     const btn = ev.relatedTarget;
-    const secId = btn.getAttribute('data-sec-id');
-    document.getElementById('itemAddSecId').value = secId;
-
-    document.getElementById('add_preview').innerHTML = '';
-    document.getElementById('add_target_dir').value = '';
-    document.getElementById('add_images_dir').value = '';
+    const secId = btn.getAttribute("data-sec-id");
+    document.getElementById("itemAddSecId").value = secId;
+    document.getElementById("add_preview").innerHTML = "";
+    document.getElementById("add_target_dir").value = "";
+    document.getElementById("add_images_dir").value = "";
   });
 
-  // 항목 수정 모달 채우기 + action 경로 설정 + 기존이미지 로딩
-  const modalItemEdit = document.getElementById('modalItemEdit');
-  modalItemEdit?.addEventListener('show.bs.modal', async (ev) => {
+  /* ======================== 항목 수정 모달 ======================== */
+  const modalItemEdit = document.getElementById("modalItemEdit");
+  modalItemEdit?.addEventListener("show.bs.modal", async (ev) => {
     const b = ev.relatedTarget;
-    const secId = b.getAttribute('data-sec-id');
-    const itemId = b.getAttribute('data-item-id');
-    document.getElementById('itemEditSecId').value = secId;
-    document.getElementById('itemEditItemId').value = itemId;
+    const secId = b.getAttribute("data-sec-id");
+    const itemId = b.getAttribute("data-item-id");
+    document.getElementById("itemEditSecId").value = secId;
+    document.getElementById("itemEditItemId").value = itemId;
 
-    document.getElementById('itemEditName').value = b.getAttribute('data-item-name') || '';
-    document.getElementById('itemEditImagesDir').value = b.getAttribute('data-item-images-dir') || '';
-    document.getElementById('itemEditDescription').value = b.getAttribute('data-item-description') || '';
-    document.getElementById('itemEditActions').value = b.getAttribute('data-item-actions') || '';
-    document.getElementById('itemEditContacts').value = b.getAttribute('data-item-contacts') || '';
-    document.getElementById('itemEditNotes').value = b.getAttribute('data-item-notes') || '';
+    document.getElementById("itemEditName").value = b.getAttribute("data-item-name") || "";
+    document.getElementById("itemEditImagesDir").value = b.getAttribute("data-item-images-dir") || "";
+    document.getElementById("itemEditDescription").value = b.getAttribute("data-item-description") || "";
+    document.getElementById("itemEditActions").value = b.getAttribute("data-item-actions") || "";
+    document.getElementById("itemEditContacts").value = b.getAttribute("data-item-contacts") || "";
+    document.getElementById("itemEditNotes").value = b.getAttribute("data-item-notes") || "";
 
-    const form = document.getElementById('formItemEdit');
+    const form = document.getElementById("formItemEdit");
     form.action = `/admin/manual/item/${encodeURIComponent(secId)}/${encodeURIComponent(itemId)}/update`;
 
-    // 프리뷰/기존 목록 초기화
-    document.getElementById('edit_preview').innerHTML = '';
-    const curDir = (document.getElementById('itemEditImagesDir').value || '').replace(/^manual\//,'');
-    const tgt = document.getElementById('edit_target_dir');
-    if (tgt) tgt.value = curDir || '';
+    // 기존 이미지 로딩
+    document.getElementById("edit_preview").innerHTML = "";
+    const curDir = (document.getElementById("itemEditImagesDir").value || "").replace(/^manual\//, "");
+    const tgt = document.getElementById("edit_target_dir");
+    if (tgt) tgt.value = curDir || "";
 
-    // 기존 이미지 목록 로딩
-    const loadDir = (document.getElementById('itemEditImagesDir').value || '').trim();
-    if (loadDir) {
-      await loadExistingImages(loadDir);
-    } else {
-      const box = document.getElementById('edit_existing_list');
-      if (box) box.innerHTML = '<div class="text-muted">이미지 폴더가 없습니다.</div>';
+    const loadDir = (document.getElementById("itemEditImagesDir").value || "").trim();
+    if (loadDir) await loadExistingImages(loadDir);
+    else {
+      const box = document.getElementById("edit_existing_list");
+      if (box) box.innerHTML = "<div class='text-muted'>이미지 폴더가 없습니다.</div>";
     }
   });
 
-  // ========== 업로드 공통 ==========
+  /* ======================== 업로드 기능 공통 ======================== */
+  async function uploadImages({ filesInputId, targetDirInputId, outDirInputId, previewContainerId }) {
+    const filesInput = document.getElementById(filesInputId);
+    if (!filesInput?.files?.length) {
+      alert("업로드할 이미지를 선택하세요.");
+      return;
+    }
+    const targetDir = (document.getElementById(targetDirInputId)?.value || "").trim();
+    const fd = new FormData();
+    for (const f of filesInput.files) fd.append("files[]", f);
+    if (targetDir) fd.append("target_dir", targetDir);
 
-  function renderThumbs(container, urls) {
-    const el = document.getElementById(container);
+    try {
+      const res = await fetch("/admin/manuals/upload_images", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!data.ok) {
+        alert("업로드 실패: " + (data.error || "unknown"));
+        return;
+      }
+      document.getElementById(outDirInputId).value = data.dir;
+      renderThumbs(previewContainerId, data.files);
+      filesInput.value = "";
+      if (!targetDir) {
+        const tdi = document.getElementById(targetDirInputId);
+        if (tdi) tdi.value = data.dir.replace(/^manual\//, "");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("업로드 중 오류가 발생했습니다.");
+    }
+  }
+
+  function renderThumbs(containerId, urls) {
+    const el = document.getElementById(containerId);
     if (!el) return;
     urls.forEach(u => {
-      const img = document.createElement('img');
+      const img = document.createElement("img");
       img.src = u;
-      img.alt = 'preview';
-      img.style.maxWidth = '120px';
-      img.style.maxHeight = '90px';
-      img.style.objectFit = 'cover';
-      img.className = 'rounded border';
+      img.alt = "preview";
+      img.className = "thumb rounded border";
       el.appendChild(img);
     });
   }
 
-  async function uploadImages({ filesInputId, targetDirInputId, outDirInputId, previewContainerId }) {
-    const filesInput = document.getElementById(filesInputId);
-    if (!filesInput?.files?.length) {
-      alert('업로드할 이미지를 선택하세요.');
-      return;
-    }
-    const targetDir = (document.getElementById(targetDirInputId)?.value || '').trim();
-
-    const fd = new FormData();
-    for (const f of filesInput.files) fd.append('files[]', f);
-    if (targetDir) fd.append('target_dir', targetDir);
-
-    try {
-      const res = await fetch('/admin/manuals/upload_images', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (!data.ok) {
-        alert('업로드 실패: ' + (data.error || 'unknown'));
-        return;
-      }
-      const outDir = document.getElementById(outDirInputId);
-      if (outDir) outDir.value = data.dir;
-
-      renderThumbs(previewContainerId, data.files);
-
-      filesInput.value = '';
-      if (!targetDir) {
-        const tdi = document.getElementById(targetDirInputId);
-        if (tdi) tdi.value = data.dir.replace(/^manual\//, '');
-      }
-    } catch (e) {
-      console.error(e);
-      alert('업로드 중 오류가 발생했습니다.');
-    }
-  }
-
-  document.getElementById('btnAddUpload')?.addEventListener('click', () => {
-    uploadImages({
-      filesInputId: 'add_files',
-      targetDirInputId: 'add_target_dir',
-      outDirInputId: 'add_images_dir',
-      previewContainerId: 'add_preview'
-    });
-  });
-
-  document.getElementById('btnEditUpload')?.addEventListener('click', () => {
-    const curDir = (document.getElementById('itemEditImagesDir')?.value || '').replace(/^manual\//, '');
-    const tgt = document.getElementById('edit_target_dir');
-    if (tgt && !tgt.value.trim() && curDir) tgt.value = curDir;
-
-    uploadImages({
-      filesInputId: 'edit_files',
-      targetDirInputId: 'edit_target_dir',
-      outDirInputId: 'itemEditImagesDir',
-      previewContainerId: 'edit_preview'
-    });
-  });
-
-  // ========== 기존 이미지 리스트/삭제 ==========
-  async function loadExistingImages(dir){
-    const qs = new URLSearchParams({ dir });
-    const res = await fetch(`/admin/manuals/list_images?${qs.toString()}`);
+  /* ======================== 기존 이미지 목록 / 삭제 ======================== */
+  async function loadExistingImages(dir) {
+    const res = await fetch(`/admin/manuals/list_images?dir=${encodeURIComponent(dir)}`);
     const data = await res.json();
-    if(!data.ok) return [];
-
-    const box = document.getElementById('edit_existing_list');
-    if(box){
-      box.innerHTML = '';
-      data.files.forEach(f=>{
-        const wrap = document.createElement('div');
-        wrap.className = 'd-flex flex-column align-items-center gap-1';
-
-        const img = document.createElement('img');
-        img.src = f.url; img.alt = f.name; img.className='thumb';
-
-        const btn = document.createElement('button');
-        btn.type='button';
-        btn.className='btn btn-outline-danger btn-sm';
+    if (!data.ok) return [];
+    const box = document.getElementById("edit_existing_list");
+    if (box) {
+      box.innerHTML = "";
+      data.files.forEach(f => {
+        const wrap = document.createElement("div");
+        wrap.className = "d-flex flex-column align-items-center gap-1";
+        const img = document.createElement("img");
+        img.src = f.url; img.alt = f.name; img.className = "thumb";
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn btn-outline-danger btn-sm";
         btn.innerHTML = '<i class="bi bi-trash"></i>';
-        btn.onclick = async ()=>{
-          if(!confirm(`삭제할까요?\n${f.name}`)) return;
+        btn.onclick = async () => {
+          if (!confirm(`삭제할까요?\n${f.name}`)) return;
           const body = { dir, name: f.name };
-          const r = await fetch('/admin/manuals/delete_image', {
-            method:'POST', headers:{'Content-Type':'application/json'},
+          const r = await fetch("/admin/manuals/delete_image", {
+            method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body)
           });
           const j = await r.json();
-          if(!j.ok){ alert('삭제 실패: '+(j.error||'unknown')); return; }
-          wrap.remove();
+          if (!j.ok) alert("삭제 실패: " + (j.error || "unknown"));
+          else wrap.remove();
         };
-
-        const cap = document.createElement('div');
-        cap.className='small text-muted text-truncate';
-        cap.style.maxWidth = '120px';
+        const cap = document.createElement("div");
+        cap.className = "small text-muted text-truncate";
+        cap.style.maxWidth = "120px";
         cap.textContent = f.name;
-
-        wrap.appendChild(img);
-        wrap.appendChild(btn);
-        wrap.appendChild(cap);
+        wrap.append(img, btn, cap);
         box.appendChild(wrap);
       });
-
-      if(data.files.length === 0){
-        box.innerHTML = '<div class="text-muted">이미지가 없습니다.</div>';
-      }
+      if (data.files.length === 0)
+        box.innerHTML = "<div class='text-muted'>이미지가 없습니다.</div>";
     }
     return data.files;
   }
+
+  /* ======================== 업로드 버튼 이벤트 ======================== */
+  document.getElementById("btnAddUpload")?.addEventListener("click", () => {
+    uploadImages({
+      filesInputId: "add_files",
+      targetDirInputId: "add_target_dir",
+      outDirInputId: "add_images_dir",
+      previewContainerId: "add_preview"
+    });
+  });
+
+  document.getElementById("btnEditUpload")?.addEventListener("click", () => {
+    const curDir = (document.getElementById("itemEditImagesDir")?.value || "").replace(/^manual\//, "");
+    const tgt = document.getElementById("edit_target_dir");
+    if (tgt && !tgt.value.trim() && curDir) tgt.value = curDir;
+    uploadImages({
+      filesInputId: "edit_files",
+      targetDirInputId: "edit_target_dir",
+      outDirInputId: "itemEditImagesDir",
+      previewContainerId: "edit_preview"
+    });
+  });
 </script>
 
 {% endblock %}
