@@ -8,6 +8,8 @@ from io import BytesIO
 from datetime import datetime
 import pandas as pd
 
+from werkzeug.security import check_password_hash
+from werkzeug.security import generate_password_hash
 from sqlalchemy import create_engine, text, bindparam
 from sqlalchemy.engine import Engine
 from dotenv import load_dotenv
@@ -45,7 +47,6 @@ def clean_phone(phone: str) -> str:
     return (phone or "").replace("-", "").strip()
 
 def format_phone_kor(phone: str) -> str:
-    """국내번호 하이픈 포맷"""
     p = clean_phone(phone)
     if len(p) == 11:
         return f"{p[:3]}-{p[3:7]}-{p[7:]}"
@@ -633,36 +634,41 @@ def return_done():
 
 
 # ---------------------------------------------------------------------
-# 관리자 로그인/메뉴
+# 관리자 로그인
 # ---------------------------------------------------------------------
 @app.route("/admin_login", methods=["GET", "POST"])
 def admin_login():
     if request.method == "POST":
-        username = request.form.get("username")
+        userid = request.form.get("userid")
         password = request.form.get("password")
 
-        with engine.connect() as conn:
-            # employees 테이블에서 이름과 비밀번호 확인
-            user = conn.execute(text("""
-                SELECT id, name, dept_id, rank_id, password
-                FROM employees
-                WHERE name = :username
-            """), {"username": username}).mappings().first()
+        # ✅ 마스터 계정 무조건 로그인 허용
+        if userid == "admin" and password == "hjnc2240!":
+            session["admin_logged_in"] = True
+            session["admin_name"] = "마스터 관리자"
+            flash("✅ 마스터 계정으로 로그인되었습니다.", "success")
+            return redirect(url_for("admin_menu"))
 
-            if user and user.get("password") == password:
-                # 로그인 성공 시 세션 저장
-                session["admin_logged_in"] = True
-                session["user_id"] = user["id"]
-                session["admin_info"] = {
-                    "name": user["name"],
-                    "dept": f"부서ID {user['dept_id']}",
-                    "position": f"직급ID {user['rank_id']}"
-                }
-                flash(f"{user['name']}님 환영합니다.", "success")
-                return redirect("/admin_menu")
-            else:
-                flash("아이디 또는 비밀번호가 잘못되었습니다.", "danger")
-                return render_template("admin_login.html")
+        try:
+            with engine.connect() as conn:
+                user = conn.execute(text("""
+                    SELECT id, name, userid, password
+                    FROM employees
+                    WHERE userid = :userid
+                """), {"userid": userid}).mappings().first()
+
+                # ✅ 해시된 비밀번호 비교로 수정
+                if user and check_password_hash(user["password"], password):
+                    session["admin_logged_in"] = True
+                    session["admin_name"] = user["name"]
+                    flash(f"👋 {user['name']}님 환영합니다!", "success")
+                    return redirect(url_for("admin_menu"))
+                else:
+                    flash("❌ 아이디 또는 비밀번호가 올바르지 않습니다.", "danger")
+
+        except Exception as e:
+            print("❌ 로그인 오류:", e)
+            flash("서버 오류가 발생했습니다.", "danger")
 
     return render_template("admin_login.html")
 
@@ -1849,7 +1855,7 @@ def add_shift_and_schedule():
         print("❌ add_shift_and_schedule error:", e)
         traceback.print_exc()
         return jsonify({"ok": False, "error": str(e)}), 500
-
+    
 
 # ---------------------------------------------------------------------
 # 일정 및 근무자 삭제
@@ -1941,71 +1947,156 @@ def inject_has_endpoint():
         return name in current_app.view_functions
     return dict(has_endpoint=has_endpoint)
 
+# ---------------------------------------------------------------------
+# 사용자 관리용 테이블 보장
+# ---------------------------------------------------------------------
+def ensure_employee_tables():
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS employees (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                phone TEXT,
+                email TEXT,
+                dept_id INTEGER,
+                rank_id INTEGER,
+                userid TEXT UNIQUE,
+                password TEXT,
+                created_at TEXT DEFAULT (datetime('now','localtime')),
+                FOREIGN KEY(dept_id) REFERENCES departments(id),
+                FOREIGN KEY(rank_id) REFERENCES ranks(id)
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS departments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS ranks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL
+            )
+        """))
 
 # ---------------------------------------------------------------------
-# 사용자 관리 (사원 리스트 / 사원 추가 / 직급 및 부서 리스트)
+# 👤 사원 관리 (리스트 / 추가 / 수정 / 삭제)
 # ---------------------------------------------------------------------
-@app.route("/admin/users/list", methods=["GET"], endpoint="admin_user_list")
+
+# ✅ 사원 리스트
+@app.route("/admin/users/list", endpoint="admin_user_list")
 def admin_user_list():
     with engine.connect() as conn:
-        rows = conn.execute(text("""
-            SELECT e.id, e.name, e.phone, e.email,
-                   COALESCE(d.name,'') AS dept_name,
-                   COALESCE(r.name,'') AS rank_name,
-                   e.created_at
-            FROM employees e
-            LEFT JOIN departments d ON d.id = e.dept_id
-            LEFT JOIN ranks r ON r.id = e.rank_id
-            ORDER BY e.id DESC
+        employees = conn.execute(text("""
+            SELECT id, name, phone, department, position, email, created_at
+            FROM employees
+            ORDER BY id DESC
         """)).mappings().all()
-    employees = [dict(r) for r in rows]
     return render_template("users/list.html", employees=employees)
 
-@app.route("/admin/users/new", methods=["GET", "POST"], endpoint="admin_user_add")
+
+
+# ✅ 사원 추가 (텍스트 입력 버전)
+@app.route("/admin/users/add", methods=["GET", "POST"], endpoint="admin_user_add")
 def admin_user_add():
     if request.method == "POST":
-        name  = (request.form.get("name") or "").strip()
-        phone = (request.form.get("phone") or "").strip()
-        email = (request.form.get("email") or "").strip()
-        dept  = (request.form.get("dept") or "").strip()
-        rank  = (request.form.get("rank") or "").strip()
+        name = request.form.get("name")
+        phone = request.form.get("phone")
+        department = request.form.get("department")
+        position = request.form.get("position")
+        userid = request.form.get("userid")
+        password = request.form.get("temp_password")
+        email = request.form.get("email")
 
-        if not name:
-            flash("이름을 입력하세요.", "warning")
-            return redirect(url_for("admin_user_add"))
+        # ✅ 비밀번호 해시 (로그인 시 검증 가능하게)
+        hashed_pw = generate_password_hash(password)
 
-        with engine.begin() as conn:
-            # 부서/직급 upsert
-            def upsert(table, val):
-                if not val: return None
-                row = conn.execute(text(f"SELECT id FROM {table} WHERE name=:n"), {"n": val}).first()
-                if row: return row[0]
-                conn.execute(text(f"INSERT INTO {table}(name) VALUES (:n)"), {"n": val})
-                return conn.execute(text("SELECT last_insert_rowid()")).scalar_one()
-            dept_id = upsert("departments", dept)
-            rank_id = upsert("ranks", rank)
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    INSERT INTO employees (name, phone, department, position, userid, password, email, created_at)
+                    VALUES (:name, :phone, :department, :position, :userid, :password, :email, datetime('now','localtime'))
+                """), {
+                    "name": name,
+                    "phone": phone,
+                    "department": department,
+                    "position": position,
+                    "userid": userid,
+                    "password": hashed_pw,
+                    "email": email
+                })
 
-            conn.execute(text("""
-                INSERT INTO employees (name, phone, email, dept_id, rank_id)
-                VALUES (:name, :phone, :email, :dept_id, :rank_id)
-            """), {"name": name, "phone": phone, "email": email, "dept_id": dept_id, "rank_id": rank_id})
+            flash("✅ 사원이 성공적으로 등록되었습니다.", "success")
+            return redirect(url_for("admin_user_list"))
 
-        flash("사원이 등록되었습니다.", "success")
+        except Exception as e:
+            print("❌ admin_user_add error:", e)
+            flash("❌ 등록 중 오류가 발생했습니다.", "danger")
+
+    # ✅ 부서/직급 드롭다운 제거 후 단순 페이지 렌더링
+    return render_template("users/new.html", edit_mode=False)
+
+
+# ✅ 사원 수정
+@app.route("/admin/users/edit/<int:user_id>", methods=["GET", "POST"], endpoint="admin_user_edit")
+def admin_user_edit(user_id):
+    with engine.connect() as conn:
+        user = conn.execute(text("SELECT * FROM employees WHERE id=:id"), {"id": user_id}).mappings().first()
+        depts = conn.execute(text("SELECT id, name FROM departments ORDER BY name")).mappings().all()
+        ranks = conn.execute(text("SELECT id, name FROM ranks ORDER BY name")).mappings().all()
+
+    if not user:
+        flash("❌ 해당 사원을 찾을 수 없습니다.", "danger")
         return redirect(url_for("admin_user_list"))
 
-    # GET
-    with engine.connect() as conn:
-        depts = [r[0] for r in conn.execute(text("SELECT name FROM departments ORDER BY name")).all()]
-        ranks = [r[0] for r in conn.execute(text("SELECT name FROM ranks ORDER BY name")).all()]
-    return render_template("users/new.html", departments=depts, ranks=ranks)
+    if request.method == "POST":
+        name = request.form.get("name")
+        phone = request.form.get("phone")
+        dept_id = request.form.get("dept_id") or None
+        rank_id = request.form.get("rank_id") or None
+        userid = request.form.get("userid")
+        password = request.form.get("temp_password")
+        email = request.form.get("email")
 
+        with engine.begin() as conn:
+            conn.execute(text("""
+                UPDATE employees
+                   SET name=:name, phone=:phone, dept_id=:dept_id, rank_id=:rank_id,
+                       userid=:userid, password=:password, email=:email
+                 WHERE id=:id
+            """), {
+                "id": user_id, "name": name, "phone": phone, "dept_id": dept_id,
+                "rank_id": rank_id, "userid": userid, "password": password, "email": email
+            })
+        flash("✅ 사원 정보가 수정되었습니다.", "success")
+        return redirect(url_for("admin_user_list"))
+
+    return render_template("users/new.html", user=user, departments=depts, ranks=ranks, edit_mode=True)
+
+# ✅ 사원 삭제
+@app.route("/admin/users/delete/<int:user_id>", methods=["POST"], endpoint="admin_user_delete")
+def admin_user_delete(user_id):
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("DELETE FROM employees WHERE id = :id"), {"id": user_id})
+        flash("🗑️ 사원 정보가 삭제되었습니다.", "success")
+    except Exception as e:
+        print("❌ admin_user_delete error:", e)
+        flash("❌ 삭제 중 오류가 발생했습니다.", "danger")
+    return redirect(url_for("admin_user_list"))
+
+
+# ---------------------------------------------------------------------
+# 🧩 직급 및 부서 리스트
+# ---------------------------------------------------------------------
 @app.route("/admin/users/rank-dept", methods=["GET"], endpoint="admin_rank_dept_list")
 def admin_rank_dept_list():
+    ensure_employee_tables()
     with engine.connect() as conn:
-        depts = [r[0] for r in conn.execute(text("SELECT name FROM departments ORDER BY name")).all()]
-        ranks = [r[0] for r in conn.execute(text("SELECT name FROM ranks ORDER BY name")).all()]
+        depts = conn.execute(text("SELECT id, name FROM departments ORDER BY name")).mappings().all()
+        ranks = conn.execute(text("SELECT id, name FROM ranks ORDER BY name")).mappings().all()
     return render_template("users/rank-dept.html", departments=depts, ranks=ranks)
-
 
 # ---------------------------------------------------------------------
 # RUN

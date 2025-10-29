@@ -1,50 +1,119 @@
 {% extends "base_admin.html" %}
-{% block title %}사원 추가{% endblock %}
+{% block title %}{{ '사원 수정' if edit_mode else '사원 추가' }} | Wooju Admin{% endblock %}
 
 {% block content %}
-<div class="container-fluid" style="max-width: 920px;">
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h3 class="mb-0">사원 추가</h3>
-    <a class="btn btn-outline-secondary" href="{{ url_for('admin_user_list') }}">리스트로</a>
+<div class="container-fluid py-4">
+
+  <!-- 상단 헤더 -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="fw-bold m-0">
+      <i class="bi {{ 'bi-pencil-square' if edit_mode else 'bi-person-plus' }} text-primary me-2"></i>
+      {{ '사원 수정' if edit_mode else '사원 추가' }}
+    </h3>
+    <a href="{{ url_for('admin_user_list') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-list-ul me-1"></i>리스트로
+    </a>
   </div>
 
-  <form method="post" action="{{ url_for('admin_user_add') }}">
-    <div class="card">
-      <div class="card-body">
+  <!-- 카드 -->
+  <div class="card shadow-sm border-0">
+    <div class="card-body">
+
+      <!-- ✅ 등록 / 수정 공용 폼 -->
+      <form method="POST" action="{% if edit_mode %}{{ url_for('admin_user_edit', user_id=user.id) }}{% else %}{{ url_for('admin_user_add') }}{% endif %}">
         <div class="row g-3">
+
+          <!-- 이름 -->
           <div class="col-md-6">
-            <label class="form-label">이름 <span class="text-danger">*</span></label>
-            <input type="text" name="name" class="form-control" required>
+            <label class="form-label fw-semibold">이름 <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control"
+                   value="{{ user.name if edit_mode else '' }}" placeholder="예: 홍길동" required>
           </div>
+
+          <!-- 연락처 -->
           <div class="col-md-6">
-            <label class="form-label">연락처</label>
-            <input type="text" name="phone" class="form-control" placeholder="010-0000-0000">
+            <label class="form-label fw-semibold">연락처</label>
+            <input type="text" name="phone" class="form-control"
+                   value="{{ user.phone if edit_mode else '' }}" placeholder="010-0000-0000">
           </div>
+
+          <!-- ✅ 부서 (텍스트 입력으로 변경) -->
           <div class="col-md-6">
-            <label class="form-label">이메일</label>
-            <input type="email" name="email" class="form-control" placeholder="user@example.com">
+            <label class="form-label fw-semibold">부서</label>
+            <input type="text" name="department" class="form-control"
+                   value="{{ user.department if edit_mode else '' }}" placeholder="예: 인프라서비스팀">
           </div>
+
+          <!-- ✅ 직급 (텍스트 입력으로 변경) -->
           <div class="col-md-6">
-            <label class="form-label">부서</label>
-            <input type="text" name="dept" class="form-control" list="deptlist" placeholder="예: 인프라서비스팀">
-            <datalist id="deptlist">
-              {% for d in departments %}<option value="{{ d }}">{% endfor %}
-            </datalist>
+            <label class="form-label fw-semibold">직급</label>
+            <input type="text" name="position" class="form-control"
+                   value="{{ user.position if edit_mode else '' }}" placeholder="예: 대리">
           </div>
+
+          <!-- 아이디 -->
           <div class="col-md-6">
-            <label class="form-label">직급</label>
-            <input type="text" name="rank" class="form-control" list="ranklist" placeholder="예: 대리">
-            <datalist id="ranklist">
-              {% for r in ranks %}<option value="{{ r }}">{% endfor %}
-            </datalist>
+            <label class="form-label fw-semibold">아이디 <span class="text-danger">*</span></label>
+            <input type="text" name="userid" class="form-control"
+                   value="{{ user.userid if edit_mode else '' }}" placeholder="예: hong123" required>
+          </div>
+
+          <!-- 비밀번호 / 임시 비밀번호 -->
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">{{ '비밀번호' if edit_mode else '임시 비밀번호' }} <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="text" id="temp_pw" name="temp_password" class="form-control"
+                     value="{{ user.password if edit_mode else '' }}" placeholder="예: temp1234" required>
+              {% if not edit_mode %}
+              <button class="btn btn-outline-primary" type="button" id="generatePw">
+                <i class="bi bi-magic"></i> 자동 생성
+              </button>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- 이메일 -->
+          <div class="col-md-12">
+            <label class="form-label fw-semibold">이메일</label>
+            <input type="email" name="email" class="form-control"
+                   value="{{ user.email if edit_mode else '' }}" placeholder="user@example.com">
           </div>
         </div>
-      </div>
-      <div class="card-footer d-flex justify-content-end gap-2">
-        <a class="btn btn-light" href="{{ url_for('admin_user_list') }}">취소</a>
-        <button class="btn btn-primary" type="submit">저장</button>
-      </div>
+
+        <!-- 하단 버튼 -->
+        <div class="d-flex justify-content-end mt-4">
+          <a href="{{ url_for('admin_user_list') }}" class="btn btn-outline-secondary me-2">취소</a>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-save me-1"></i>{{ '수정' if edit_mode else '저장' }}
+          </button>
+        </div>
+      </form>
     </div>
-  </form>
+  </div>
 </div>
+
+<!-- ✅ 스타일 -->
+<style>
+  .card {
+    max-width: 850px;
+    margin: 0 auto;
+    border-radius: 12px;
+  }
+  .form-label {
+    font-size: 0.95rem;
+  }
+  input::placeholder {
+    color: #aaa;
+  }
+</style>
+
+<!-- ✅ JS: 자동 임시비밀번호 생성 -->
+{% if not edit_mode %}
+<script>
+document.getElementById('generatePw').addEventListener('click', () => {
+  const randomPw = Math.random().toString(36).slice(-8);
+  document.getElementById('temp_pw').value = randomPw;
+});
+</script>
+{% endif %}
 {% endblock %}

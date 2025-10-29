@@ -1,53 +1,132 @@
 {% extends "base_admin.html" %}
-{% block title %}사원 리스트{% endblock %}
+{% block title %}사원 리스트 | Wooju Admin{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h3 class="mb-0">사원 리스트</h3>
+<div class="container-fluid py-4">
+
+  <!-- 상단 헤더 -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-      <a class="btn btn-primary" href="{{ url_for('admin_user_add') }}">사원 추가</a>
-      <a class="btn btn-outline-secondary" href="{{ url_for('admin_rank_dept_list') }}">직급/부서 보기</a>
+      <h3 class="fw-bold mb-0">
+        <i class="bi bi-people-fill text-primary me-2"></i>사원 리스트
+      </h3>
+      <p class="text-muted small mb-0">등록된 사원 정보를 한눈에 확인하고 관리할 수 있습니다.</p>
+    </div>
+
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('admin_user_add') }}" class="btn btn-primary">
+        <i class="bi bi-person-plus"></i> 사원 추가
+      </a>
+      <a href="{{ url_for('admin_rank_dept_list') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-diagram-3"></i> 직급/부서 보기
+      </a>
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-          <thead class="table-light">
-            <tr>
-              <th style="width:64px;" class="text-center">No</th>
-              <th>이름</th>
-              <th>부서</th>
-              <th>직급</th>
-              <th>연락처</th>
-              <th>이메일</th>
-              <th style="width:160px;">등록일</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% if employees and employees|length %}
-              {% for e in employees %}
-              <tr>
-                <td class="text-center">{{ loop.revindex }}</td>
-                <td>{{ e.name }}</td>
-                <td>{{ e.dept_name or '' }}</td>
-                <td>{{ e.rank_name or '' }}</td>
-                <td>{{ e.phone or '' }}</td>
-                <td>{{ e.email or '' }}</td>
-                <td>{{ e.created_at or '' }}</td>
-              </tr>
-              {% endfor %}
-            {% else %}
-              <tr>
-                <td colspan="7" class="text-center text-muted py-5">등록된 사원이 없습니다.</td>
-              </tr>
-            {% endif %}
-          </tbody>
-        </table>
+  <!-- 검색 필드 -->
+  <div class="card shadow-sm border-0 mb-3">
+    <div class="card-body py-2">
+      <div class="row g-2 align-items-center">
+        <div class="col-md-4">
+          <div class="input-group">
+            <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+            <input id="searchInput" type="text" class="form-control" placeholder="이름, 부서, 연락처, 직급 검색">
+          </div>
+        </div>
+        <div class="col-md-8 text-end small text-muted">
+          총 <strong>{{ employees|length }}</strong>명 등록됨
+        </div>
       </div>
     </div>
   </div>
+
+  <!-- 사원 리스트 테이블 -->
+  <div class="card shadow-sm border-0">
+    <div class="table-responsive">
+      <table class="table align-middle mb-0" id="employeeTable">
+        <thead class="table-light text-center align-middle">
+          <tr>
+            <th style="width: 60px;">No</th>
+            <th>이름</th>
+            <th>부서</th>
+            <th>직급</th>
+            <th>연락처</th>
+            <th>이메일</th>
+            <th>등록일</th>
+            <th style="width: 120px;">관리</th>
+          </tr>
+        </thead>
+        <tbody class="text-center">
+          {% for e in employees %}
+          <tr>
+            <td>{{ loop.revindex }}</td>
+            <td class="fw-semibold">{{ e.name }}</td>
+            <td>{{ e.department or '-' }}</td>
+            <td>{{ e.position or '-' }}</td>
+            <td>{{ e.phone or '-' }}</td>
+            <td>{{ e.email or '-' }}</td>
+            <td class="text-muted small">{{ e.created_at or '' }}</td>
+            <td>
+              <div class="btn-group btn-group-sm">
+                <a href="{{ url_for('admin_user_edit', user_id=e.id) }}" class="btn btn-outline-primary">
+                  <i class="bi bi-pencil-square"></i>
+                </a>
+                <form action="{{ url_for('admin_user_delete', user_id=e.id) }}" method="POST" 
+                      onsubmit="return confirm('정말 삭제하시겠습니까?')" style="display:inline;">
+                  <button type="submit" class="btn btn-outline-danger">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="8" class="text-muted py-4">등록된 사원이 없습니다.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
 </div>
+
+<!-- ✅ 검색 기능 JS -->
+<script>
+document.getElementById("searchInput").addEventListener("keyup", function() {
+  const keyword = this.value.toLowerCase();
+  const rows = document.querySelectorAll("#employeeTable tbody tr");
+  rows.forEach(row => {
+    const text = row.textContent.toLowerCase();
+    row.style.display = text.includes(keyword) ? "" : "none";
+  });
+});
+</script>
+
+<style>
+  .card {
+    border-radius: 12px;
+  }
+  table thead {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  #searchInput::placeholder {
+    color: #bbb;
+  }
+  .btn-outline-primary, .btn-outline-danger {
+    border-radius: 6px;
+  }
+  .btn-outline-primary:hover {
+    background-color: #0d6efd;
+    color: white;
+  }
+  .btn-outline-danger:hover {
+    background-color: #dc3545;
+    color: white;
+  }
+</style>
+
 {% endblock %}
