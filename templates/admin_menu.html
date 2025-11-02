@@ -4,7 +4,7 @@
 {% block layout_extra_class %}has-footer{% endblock %}
 
 {% block content %}
-<!-- 상단 바 -->
+<!-- ================= 상단 바 ================= -->
 <div class="bg-white border rounded-3 px-3 py-2 d-flex align-items-center justify-content-between mb-3" style="min-height:44px;">
   <div class="fw-semibold text-muted">우주정보통신</div>
   <div class="d-flex align-items-center gap-2">
@@ -16,26 +16,28 @@
   </div>
 </div>
 
-<!-- 일정관리 + 오늘의 할 일 -->
+<!-- ================= 일정관리 + 오늘의 할 일 ================= -->
 <div class="row g-3">
-  <!-- 캘린더 -->
+  <!-- 일정관리 -->
   <div class="col-12 col-lg-8">
     <div class="card" style="height: 450px;">
       <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
-        <div>일정관리</div>
+        <div class="fw-semibold">일정관리</div>
 
-        <!-- 캘린더 현재 월/연도 표기 -->
+        <!-- 가운데 연/월 표시 -->
         <div class="flex-grow-1 text-center">
-          <div id="current-date" class="text-white fw-bold"></div>
+          <span id="current-date" class="fw-bold fs-6 text-white" style="cursor:pointer;" title="클릭하여 월/연도 이동"></span>
         </div>
 
-        <!-- 캘린더 네비게이션 -->
+        <!-- 버튼 -->
         <div class="d-flex gap-1">
-          <button class="btn btn-secondary btn-sm" onclick="postCalendarNav('today')">today</button>
-          <button class="btn btn-dark btn-sm" onclick="postCalendarNav('prev')">&lt;</button>
-          <button class="btn btn-dark btn-sm" onclick="postCalendarNav('next')">&gt;</button>
+          <button class="btn btn-sm btn-secondary" onclick="postCalendarNav('today')">today</button>
+          <button class="btn btn-sm btn-dark" onclick="postCalendarNav('prev')">&lt;</button>
+          <button class="btn btn-sm btn-dark" onclick="postCalendarNav('next')">&gt;</button>
         </div>
       </div>
+
+      <!-- iframe (FullCalendar 페이지 포함) -->
       <div class="card-body p-0">
         <iframe id="calendarIframe" src="/calendar" style="width:100%;height:100%;border:none;"></iframe>
       </div>
@@ -87,18 +89,45 @@
   </div>
 </div>
 
-<!-- 오늘의 할 일 (DB 연동 스크립트) -->
+<!-- ================= 캘린더 연동 ================= -->
+<script>
+function postCalendarNav(command) {
+  const iframe = document.getElementById("calendarIframe");
+  if (iframe && iframe.contentWindow) {
+    iframe.contentWindow.postMessage({ type: "calendarNav", command }, "*");
+  }
+}
+
+// 부모(이 페이지) ← 자식(calendar.html)
+window.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "updateCurrentDate") {
+    document.getElementById("current-date").textContent = event.data.dateText || "";
+  }
+});
+
+// 중앙 연도/월 클릭 시 → 자식(calendar.html)에 openPicker 전송
+document.addEventListener("DOMContentLoaded", () => {
+  const dateText = document.getElementById("current-date");
+  if (dateText) {
+    dateText.addEventListener("click", () => {
+      const iframe = document.getElementById("calendarIframe");
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage({ type: "openPicker" }, "*");
+      }
+    });
+  }
+});
+</script>
+
+<!-- ================= 오늘의 할 일 ================= -->
 <script>
 let filter = "all";
-
-// DB에서 목록 로드
 async function loadTodos() {
   const res = await fetch("/todos");
   const todos = await res.json();
   renderTodoList(todos);
 }
 
-// 렌더링
 function renderTodoList(todos) {
   const list = document.getElementById("todo-list");
   const activeCountEl = document.getElementById("todo-count-active");
@@ -134,7 +163,6 @@ function renderTodoList(todos) {
   totalCountEl.textContent = todos.length;
 }
 
-// 추가
 async function addTodo(content) {
   if (!content.trim()) return;
   await fetch("/todos/add", {
@@ -145,7 +173,6 @@ async function addTodo(content) {
   await loadTodos();
 }
 
-// 완료 토글
 async function toggleTodo(id, currentStatus) {
   const newStatus = currentStatus === "완료" ? "진행" : "완료";
   await fetch(`/todos/update/${id}`, {
@@ -156,7 +183,6 @@ async function toggleTodo(id, currentStatus) {
   await loadTodos();
 }
 
-// 삭제
 async function deleteTodo(id) {
   await fetch(`/todos/update/${id}`, {
     method: "POST",
@@ -167,7 +193,6 @@ async function deleteTodo(id) {
   await loadTodos();
 }
 
-// 완료 항목 비우기
 async function clearDone() {
   const res = await fetch("/todos");
   const todos = await res.json();
@@ -182,14 +207,12 @@ async function clearDone() {
   await loadTodos();
 }
 
-// 전체 삭제
 async function clearAll() {
   if (!confirm("모든 할 일을 삭제하시겠습니까?")) return;
   await fetch("/todos/delete_all", {method: "POST"});
   await loadTodos();
 }
 
-// 이벤트 등록
 document.getElementById("todo-form").addEventListener("submit", e => {
   e.preventDefault();
   const input = document.getElementById("todo-input");
@@ -206,34 +229,13 @@ document.querySelectorAll("[data-filter]").forEach(btn => {
   });
 });
 
-document.getElementById("btn-clear-done").addEventListener("click", e => {
-  e.preventDefault();
-  clearDone();
-});
-document.getElementById("btn-clear-all").addEventListener("click", e => {
-  e.preventDefault();
-  clearAll();
-});
+document.getElementById("btn-clear-done").addEventListener("click", clearDone);
+document.getElementById("btn-clear-all").addEventListener("click", clearAll);
 
 loadTodos();
 </script>
 
-<!-- 캘린더 연동 -->
-<script>
-window.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'updateCurrentDate') {
-    document.getElementById('current-date').textContent = event.data.dateText || '';
-  }
-});
-function postCalendarNav(command) {
-  const ifr = document.getElementById('calendarIframe');
-  if (ifr && ifr.contentWindow) {
-    ifr.contentWindow.postMessage({ type: 'calendarNav', command }, '*');
-  }
-}
-</script>
-
-<!-- 장비 현황 + 공지사항 -->
+<!-- ================= 장비 현황 + 공지사항 ================= -->
 <div class="row g-3 mt-1">
   <div class="col-lg-6">
     <div class="card h-100">
@@ -308,56 +310,7 @@ function postCalendarNav(command) {
   </div>
 </div>
 
-<!-- 일정 모달 -->
-<div class="modal fade" id="scheduleModal" tabindex="-1" aria-labelledby="scheduleModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header bg-primary text-white">
-        <h5 class="modal-title" id="scheduleModalLabel">일정</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="닫기"></button>
-      </div>
-      <div class="modal-body">
-        <form>
-          <div class="row g-2 mb-3">
-            <div class="col-md-8">
-              <label class="form-label">제목</label>
-              <input id="schedule-title" type="text" class="form-control" placeholder="제목 입력">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">캘린더</label>
-              <select class="form-select" disabled>
-                <option>개인일정캘린더</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="row g-2 mb-3">
-            <div class="col-md-6">
-              <label class="form-label">날짜/시간 (시작)</label>
-              <input id="schedule-start" type="datetime-local" class="form-control">
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">날짜/시간 (종료)</label>
-              <input id="schedule-end" type="datetime-local" class="form-control">
-            </div>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label">비고</label>
-            <textarea id="schedule-note" class="form-control" rows="3" placeholder="내용 입력"></textarea>
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button id="deleteScheduleBtn" type="button" class="btn btn-danger d-none">삭제</button>
-        <button id="saveScheduleBtn"   type="button" class="btn btn-primary">저장</button>
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- 세션 타이머 -->
+<!-- ================= 세션 타이머 ================= -->
 <script>
 (function () {
   const IDLE_MINUTES = 60;
