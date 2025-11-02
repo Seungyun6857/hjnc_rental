@@ -8,17 +8,13 @@ from io import BytesIO
 from datetime import datetime
 import pandas as pd
 
-from sqlalchemy import text
-from werkzeug.security import check_password_hash
-from werkzeug.security import generate_password_hash
-from sqlalchemy import create_engine, text, bindparam
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
+from werkzeug.security import check_password_hash, generate_password_hash
 from dotenv import load_dotenv
-
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
-
 
 # ---------------------------------------------------------------------
 # 앱/DB 기본 설정
@@ -31,8 +27,13 @@ app.secret_key = os.getenv("SECRET_KEY", "SECRET_KEY_2025")
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.jinja_env.auto_reload = True
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///rental.db")
+# ✅ app.py와 같은 폴더의 DB를 절대경로로 지정
+DB_PATH = os.path.join(os.path.dirname(__file__), "rental.db")
+DATABASE_URL = f"sqlite:///{DB_PATH}"
 engine: Engine = create_engine(DATABASE_URL, future=True, pool_pre_ping=True)
+
+print("📂 DB Path:", DB_PATH)
+print("DB URL:", DATABASE_URL)
 
 def is_sqlite() -> bool:
     return engine.dialect.name == "sqlite"
@@ -40,6 +41,12 @@ def is_sqlite() -> bool:
 def is_postgres() -> bool:
     return engine.dialect.name == "postgresql"
 
+# 🔹 app.py와 같은 폴더의 DB를 절대경로로 지정
+DB_PATH = os.path.join(os.path.dirname(__file__), "rental.db")
+DATABASE_URL = f"sqlite:///{DB_PATH}"
+engine = create_engine(DATABASE_URL, future=True, pool_pre_ping=True)
+
+print("📂 DB Path:", DB_PATH)
 
 # ---------------------------------------------------------------------
 # 공통 유틸
