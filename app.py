@@ -2108,56 +2108,54 @@ def admin_rank_dept_list():
     return render_template("users/rank-dept.html", departments=depts, ranks=ranks)
 
 # ---------------------------------------------------------------------
-# ✅ 오늘의 할 일 (To-Do)
+# 🧩 오늘의 할 일 (To-Do)
 # ---------------------------------------------------------------------
 @app.route("/todos", methods=["GET"])
 def get_todos():
+    """할 일 목록 조회"""
     user = session.get("admin_name") or session.get("user_name") or "guest"
-    with engine.connect() as conn:
+    with engine.begin() as conn:
         rows = conn.execute(text("""
-            SELECT id, content, status, created_at
+            SELECT id, user_name, content, status, created_at
             FROM todos
-            WHERE user_name=:u
+            WHERE user_name = :user
+              AND status != '삭제'
             ORDER BY id DESC
-        """), {"u":user}).mappings().all()
+        """), {"user": user}).mappings().all()
     return jsonify([dict(r) for r in rows])
 
-# ✅ 할 일 추가
 @app.route("/todos/add", methods=["POST"])
 def add_todo():
+    """할 일 추가"""
     data = request.get_json()
-    content = data.get("content", "")
-    user_name = session.get("user_name", "관리자")
-
+    content = data.get("content", "").strip()
     if not content:
-        return jsonify({"ok": False, "error": "내용이 비어있음"}), 400
-
+        return jsonify({"ok": False, "error": "내용이 비어 있음"}), 400
+    user = session.get("admin_name") or session.get("user_name") or "guest"
     with engine.begin() as conn:
         conn.execute(text("""
-            INSERT INTO todos (user_name, content, status)
-            VALUES (:user_name, :content, '진행')
-        """), {"user_name": user_name, "content": content})
-
+            INSERT INTO todos (user_name, content, status, created_at)
+            VALUES (:user_name, :content, '진행', datetime('now','localtime'))
+        """), {"user_name": user, "content": content})
     return jsonify({"ok": True})
 
-
-# ✅ 상태 변경 (완료/삭제 등)
 @app.route("/todos/update/<int:todo_id>", methods=["POST"])
 def update_todo(todo_id):
+    """할 일 상태 변경 (진행/완료/삭제)"""
     data = request.get_json()
-    new_status = data.get("status", "진행")
+    status = data.get("status")
     with engine.begin() as conn:
         conn.execute(text("UPDATE todos SET status = :status WHERE id = :id"),
-                     {"status": new_status, "id": todo_id})
+                     {"status": status, "id": todo_id})
     return jsonify({"ok": True})
 
-
-# ✅ 삭제된 항목 전체 제거
 @app.route("/todos/delete_all", methods=["POST"])
 def delete_all_todos():
+    """삭제 상태의 항목을 전체 삭제"""
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM todos WHERE status = '삭제'"))
     return jsonify({"ok": True})
+
 
 # ---------------------------------------------------------------------
 # RUN
