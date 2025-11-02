@@ -2109,65 +2109,47 @@ def admin_rank_dept_list():
     return render_template("users/rank-dept.html", departments=depts, ranks=ranks)
 
 # ---------------------------------------------------------------------
-# 🧩 오늘의 할 일 (To-Do)
+# ✅ 오늘의 할 일 (To-Do)
 # ---------------------------------------------------------------------
 @app.route("/todos", methods=["GET"])
 def get_todos():
-    """로그인된 사용자별 To-Do 목록 반환"""
     user = session.get("admin_name") or session.get("user_name") or "guest"
     with engine.connect() as conn:
         rows = conn.execute(text("""
             SELECT id, content, status, created_at
             FROM todos
-            WHERE user_name = :user
+            WHERE user_name=:u
             ORDER BY id DESC
-        """), {"user": user}).mappings().all()
+        """), {"u":user}).mappings().all()
     return jsonify([dict(r) for r in rows])
-
 
 @app.route("/todos/add", methods=["POST"])
 def add_todo():
-    """할 일 추가"""
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     content = (data.get("content") or "").strip()
-    if not content:
-        return jsonify({"ok": False, "error": "내용 없음"}), 400
-
+    if not content: return jsonify({"ok":False,"error":"내용 없음"}),400
     user = session.get("admin_name") or session.get("user_name") or "guest"
-
     with engine.begin() as conn:
-        conn.execute(text("""
-            INSERT INTO todos (user_name, content, status)
-            VALUES (:user, :content, '진행')
-        """), {"user": user, "content": content})
-    return jsonify({"ok": True})
-
+        conn.execute(text("INSERT INTO todos (user_name,content,status) VALUES (:u,:c,'진행')"), {"u":user,"c":content})
+    return jsonify({"ok":True})
 
 @app.route("/todos/update/<int:todo_id>", methods=["POST"])
 def update_todo(todo_id):
-    """완료 상태 토글"""
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     new_status = data.get("status")
-    if new_status not in ("진행", "완료"):
-        return jsonify({"ok": False, "error": "invalid status"}), 400
-
+    if new_status not in ("진행","완료","삭제"):
+        return jsonify({"ok":False,"error":"invalid status"}),400
     user = session.get("admin_name") or session.get("user_name") or "guest"
     with engine.begin() as conn:
-        conn.execute(text("""
-            UPDATE todos
-            SET status = :status
-            WHERE id = :id AND user_name = :user
-        """), {"status": new_status, "id": todo_id, "user": user})
-    return jsonify({"ok": True})
-
+        conn.execute(text("UPDATE todos SET status=:s WHERE id=:i AND user_name=:u"), {"s":new_status,"i":todo_id,"u":user})
+    return jsonify({"ok":True})
 
 @app.route("/todos/delete_all", methods=["POST"])
 def delete_all_todos():
-    """전체 삭제"""
     user = session.get("admin_name") or session.get("user_name") or "guest"
     with engine.begin() as conn:
-        conn.execute(text("DELETE FROM todos WHERE user_name = :user"), {"user": user})
-    return jsonify({"ok": True})
+        conn.execute(text("DELETE FROM todos WHERE user_name=:u AND status='삭제'"), {"u":user})
+    return jsonify({"ok":True})
 
 # ---------------------------------------------------------------------
 # RUN
