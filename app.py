@@ -8,7 +8,7 @@ from io import BytesIO
 from datetime import datetime
 import pandas as pd
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, bindparam
 from sqlalchemy.engine import Engine
 from werkzeug.security import check_password_hash, generate_password_hash
 from dotenv import load_dotenv
