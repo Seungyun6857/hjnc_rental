@@ -41,13 +41,6 @@ def is_sqlite() -> bool:
 def is_postgres() -> bool:
     return engine.dialect.name == "postgresql"
 
-# 🔹 app.py와 같은 폴더의 DB를 절대경로로 지정
-DB_PATH = os.path.join(os.path.dirname(__file__), "rental.db")
-DATABASE_URL = f"sqlite:///{DB_PATH}"
-engine = create_engine(DATABASE_URL, future=True, pool_pre_ping=True)
-
-print("📂 DB Path:", DB_PATH)
-
 # ---------------------------------------------------------------------
 # 공통 유틸
 # ---------------------------------------------------------------------
@@ -69,7 +62,6 @@ def format_phone_kor(phone: str) -> str:
 def now_kst_str() -> str:
     kst = pytz.timezone("Asia/Seoul")
     return datetime.now(kst).strftime("%Y-%m-%d %H:%M:%S")
-
 
 # ---------------------------------------------------------------------
 # 스키마 보장
@@ -107,8 +99,10 @@ def ensure_tables():
                 "ALTER TABLE board ADD COLUMN is_pinned INTEGER DEFAULT 0",
                 "ALTER TABLE board ADD COLUMN board_type TEXT DEFAULT 'general'",
             ]:
-                try: conn.execute(text(col_sql))
-                except Exception: pass
+                try:
+                    conn.execute(text(col_sql))
+                except Exception:
+                    pass
 
         # 일정
         if is_postgres():
@@ -242,7 +236,6 @@ def ensure_tables():
                 item_name TEXT
             )
         """))
-        # bundle_id 보강 (다른 쿼리에서 사용)
         try:
             conn.execute(text("ALTER TABLE walkie_talkie_units ADD COLUMN bundle_id INTEGER"))
         except Exception:
@@ -310,7 +303,6 @@ def ensure_tables():
                 )
             """))
 
-        # ⚠️ 전자결재 테이블은 생성하지 않음(삭제)
         # 인덱스
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_rental_dept_status ON rental (dept, status)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_returns_log_rental ON returns_log (rental_id)"))
@@ -352,7 +344,6 @@ def _build_equipment_filters(req):
         params["available_qty"] = req.args.get("available_qty")
     where_clause = "WHERE " + " AND ".join(filters) if filters else ""
     return where_clause, params
-
 
 # ---------------------------------------------------------------------
 # 사용자 메뉴
@@ -2175,4 +2166,8 @@ ensure_tables()
 print("DB URL:", DATABASE_URL)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    ensure_tables()
+    print("✅ todos 테이블 확인 완료")
+
+    # 🔹 재시작 시 중복 출력 방지
+    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
