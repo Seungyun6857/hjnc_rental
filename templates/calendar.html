@@ -20,7 +20,7 @@
     #calendar {
       max-width: 100%;
       height: 450px;
-      margin: 20px auto;
+      margin: 0 auto;
     }
 
     .fc-daygrid-day:hover {
@@ -32,15 +32,34 @@
       background: #ffeaa7 !important;
     }
 
-    .fc-toolbar {
-      display: none !important;
+    /* 상단 컨트롤러 */
+    .calendar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #00b7ff;
+      color: #fff;
+      padding: 5px 10px;
+      border-radius: 5px 5px 0 0;
+    }
+
+    .calendar-header button {
+      background: white;
+      border: none;
+      color: #00b7ff;
+      font-weight: bold;
+      padding: 3px 10px;
+      border-radius: 4px;
+      transition: background 0.2s;
+    }
+    .calendar-header button:hover {
+      background: rgba(255,255,255,0.7);
     }
 
     #monthTitle {
-      font-size: 1.25rem;
-      font-weight: 600;
-      text-align: center;
-      margin: 10px 0 15px 0;
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
     }
 
     .shift-tag {
@@ -73,7 +92,18 @@
 </head>
 <body>
 
-  <div id="monthTitle">로딩 중...</div>
+  <!-- 상단 월 컨트롤러 -->
+  <div class="calendar-header">
+    <div class="d-flex gap-1">
+      <button id="btnPrev">&lt;</button>
+    </div>
+    <div id="monthTitle">로딩 중...</div>
+    <div class="d-flex gap-1">
+      <button id="btnToday">today</button>
+      <button id="btnNext">&gt;</button>
+    </div>
+  </div>
+
   <div id="calendar"></div>
 
   <!-- 📌 근무자 / 일정 추가 모달 -->
@@ -141,15 +171,20 @@
       }
     }
 
-    // ✅ 월 제목 갱신
+    // ✅ 월 제목 갱신 + 부모(admin_menu)에 전달
     function updateMonthTitle(date) {
       const year = date.getFullYear();
       const month = date.getMonth() + 1;
       monthTitle.textContent = `${year}년 ${month}월`;
+
+      // 부모(admin_menu.html)에 현재 월/연도 전달
+      window.parent.postMessage({
+        type: "updateCurrentDate",
+        dateText: `${year}년 ${month}월`
+      }, "*");
     }
 
     const today = new Date();
-    updateMonthTitle(today);
 
     const calendar = new FullCalendar.Calendar(calendarEl, {
       initialView: 'dayGridMonth',
@@ -185,8 +220,8 @@
         shiftModal.show();
       },
 
-      datesSet() {
-        updateMonthTitle(calendar.getDate());
+      datesSet(info) {
+        updateMonthTitle(info.start);
       },
 
       // ✅ 근무자 표시
@@ -228,6 +263,34 @@
 
     await loadShifts();
     calendar.render();
+    updateMonthTitle(today);
+
+    // ✅ 버튼 기능
+    document.getElementById('btnPrev').addEventListener('click', () => {
+      calendar.prev();
+      updateMonthTitle(calendar.getDate());
+    });
+    document.getElementById('btnNext').addEventListener('click', () => {
+      calendar.next();
+      updateMonthTitle(calendar.getDate());
+    });
+    document.getElementById('btnToday').addEventListener('click', () => {
+      calendar.today();
+      updateMonthTitle(calendar.getDate());
+    });
+
+    // ✅ 제목 클릭 시 연도 변경
+    monthTitle.addEventListener('click', () => {
+      const currentYear = calendar.getDate().getFullYear();
+      const input = prompt(`이동할 연도를 입력하세요 (현재 ${currentYear}년):`);
+      const year = parseInt(input);
+      if (!isNaN(year)) {
+        const d = calendar.getDate();
+        d.setFullYear(year);
+        calendar.gotoDate(d);
+        updateMonthTitle(d);
+      }
+    });
 
     // ✅ 저장 버튼
     document.getElementById('btnSaveShift').addEventListener('click', async () => {

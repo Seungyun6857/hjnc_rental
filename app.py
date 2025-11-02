@@ -307,6 +307,16 @@ def ensure_tables():
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_rental_dept_status ON rental (dept, status)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_returns_log_rental ON returns_log (rental_id)"))
 
+        # 🧩 오늘의 할 일 (To-Do)
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS todos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_name TEXT NOT NULL,
+                content TEXT NOT NULL,
+                status TEXT DEFAULT '진행',
+                created_at TEXT DEFAULT (datetime('now','localtime'))
+            )
+        """))
 
 # ---------------------------------------------------------------------
 # 장비 목록/엑셀에서 같이 쓰는 필터
@@ -2097,6 +2107,67 @@ def admin_rank_dept_list():
         depts = conn.execute(text("SELECT id, name FROM departments ORDER BY name")).mappings().all()
         ranks = conn.execute(text("SELECT id, name FROM ranks ORDER BY name")).mappings().all()
     return render_template("users/rank-dept.html", departments=depts, ranks=ranks)
+
+# ---------------------------------------------------------------------
+# 🧩 오늘의 할 일 (To-Do)
+# ---------------------------------------------------------------------
+@app.route("/todos", methods=["GET"])
+def get_todos():
+    """로그인된 사용자별 To-Do 목록 반환"""
+    user = session.get("admin_name") or session.get("user_name") or "guest"
+    with engine.connect() as conn:
+        rows = conn.execute(text("""
+            SELECT id, content, status, created_at
+            FROM todos
+            WHERE user_name = :user
+            ORDER BY id DESC
+        """), {"user": user}).mappings().all()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/todos/add", methods=["POST"])
+def add_todo():
+    """할 일 추가"""
+    data = request.get_json()
+    content = (data.get("content") or "").strip()
+    if not content:
+        return jsonify({"ok": False, "error": "내용 없음"}), 400
+
+    user = session.get("admin_name") or session.get("user_name") or "guest"
+
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO todos (user_name, content, status)
+            VALUES (:user, :content, '진행')
+        """), {"user": user, "content": content})
+    return jsonify({"ok": True})
+
+
+@app.route("/todos/update/<int:todo_id>", methods=["POST"])
+def update_todo(todo_id):
+    """완료 상태 토글"""
+    data = request.get_json()
+    new_status = data.get("status")
+    if new_status not in ("진행", "완료"):
+        return jsonify({"ok": False, "error": "invalid status"}), 400
+
+    user = session.get("admin_name") or session.get("user_name") or "guest"
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE todos
+            SET status = :status
+            WHERE id = :id AND user_name = :user
+        """), {"status": new_status, "id": todo_id, "user": user})
+    return jsonify({"ok": True})
+
+
+@app.route("/todos/delete_all", methods=["POST"])
+def delete_all_todos():
+    """전체 삭제"""
+    user = session.get("admin_name") or session.get("user_name") or "guest"
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM todos WHERE user_name = :user"), {"user": user})
+    return jsonify({"ok": True})
 
 # ---------------------------------------------------------------------
 # RUN

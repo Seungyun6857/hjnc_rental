@@ -24,7 +24,7 @@
       <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
         <div>일정관리</div>
 
-        <!-- 캘린더 현재 월/연도 표기 (iframe -> postMessage 수신) -->
+        <!-- 캘린더 현재 월/연도 표기 -->
         <div class="flex-grow-1 text-center">
           <div id="current-date" class="text-white fw-bold"></div>
         </div>
@@ -42,7 +42,7 @@
     </div>
   </div>
 
-  <!-- 오늘의 할 일 위젯 -->
+  <!-- 오늘의 할 일 -->
   <div class="col-12 col-lg-4">
     <div class="card h-100">
       <div class="card-header bg-secondary text-white d-flex align-items-center justify-content-between">
@@ -60,7 +60,7 @@
             <input id="todo-input" type="text" class="form-control" placeholder="할 일을 입력하고 Enter">
             <button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg"></i></button>
           </div>
-          <div class="form-text">Enter로 추가, 항목을 체크하면 완료 처리됩니다.</div>
+          <div class="form-text">Enter로 추가, 항목 클릭 시 완료 처리됩니다.</div>
         </form>
 
         <!-- 필터 -->
@@ -71,148 +71,166 @@
             <button type="button" class="btn btn-outline-secondary" data-filter="done">완료</button>
           </div>
           <div class="d-flex gap-2">
-            <button id="btn-clear-done" class="btn btn-sm btn-outline-secondary"><i class="bi bi-check2-all me-1"></i>완료 비우기</button>
-            <button id="btn-clear-all"  class="btn btn-sm btn-outline-danger"><i class="bi bi-trash3 me-1"></i>전체 삭제</button>
+            <button id="btn-clear-done" class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-check2-all me-1"></i>완료 비우기
+            </button>
+            <button id="btn-clear-all" class="btn btn-sm btn-outline-danger">
+              <i class="bi bi-trash3 me-1"></i>전체 삭제
+            </button>
           </div>
         </div>
 
         <!-- 목록 -->
         <ul id="todo-list" class="list-group list-group-flush"></ul>
       </div>
-
-      <div class="card-footer text-muted small">
-        * 이 목록은 이 브라우저에만 저장됩니다(localStorage).
-      </div>
     </div>
   </div>
 </div>
 
+<!-- 오늘의 할 일 (DB 연동 스크립트) -->
 <script>
-  // ===== 캘린더 현재 월/연도 반영
-  window.addEventListener('message', (event) => {
-    if (event.data && event.data.type === 'updateCurrentDate') {
-      document.getElementById('current-date').textContent = event.data.dateText || '';
-    }
-  });
-  function postCalendarNav(command) {
-    const ifr = document.getElementById('calendarIframe');
-    if (ifr && ifr.contentWindow) {
-      ifr.contentWindow.postMessage({ type: 'calendarNav', command }, '*');
-    }
+let filter = "all";
+
+// DB에서 목록 로드
+async function loadTodos() {
+  const res = await fetch("/todos");
+  const todos = await res.json();
+  renderTodoList(todos);
+}
+
+// 렌더링
+function renderTodoList(todos) {
+  const list = document.getElementById("todo-list");
+  const activeCountEl = document.getElementById("todo-count-active");
+  const totalCountEl = document.getElementById("todo-count-total");
+
+  let filtered = todos;
+  if (filter === "active") filtered = todos.filter(t => t.status === "진행");
+  if (filter === "done") filtered = todos.filter(t => t.status === "완료");
+
+  list.innerHTML = "";
+  if (filtered.length === 0) {
+    list.innerHTML = `<li class="list-group-item text-center text-muted py-3">할 일이 없습니다.</li>`;
+  } else {
+    filtered.forEach(todo => {
+      const li = document.createElement("li");
+      li.className = "list-group-item d-flex justify-content-between align-items-center";
+      li.innerHTML = `
+        <div class="d-flex align-items-center gap-2">
+          <input type="checkbox" class="form-check-input" ${todo.status === "완료" ? "checked" : ""}
+            onchange="toggleTodo(${todo.id}, '${todo.status}')">
+          <span class="${todo.status === '완료' ? 'text-decoration-line-through text-muted' : ''}"
+                style="cursor:pointer">${todo.content}</span>
+        </div>
+        <button class="btn btn-sm btn-outline-danger" onclick="deleteTodo(${todo.id})">
+          <i class="bi bi-x-lg"></i>
+        </button>`;
+      list.appendChild(li);
+    });
   }
 
-  // ===== 오늘의 할 일 (localStorage: admin.todos)
-  (function () {
-    const KEY = 'admin.todos';
-    /** @type {HTMLUListElement} */ const listEl = document.getElementById('todo-list');
-    const formEl   = document.getElementById('todo-form');
-    const inputEl  = document.getElementById('todo-input');
-    const btnClearDone = document.getElementById('btn-clear-done');
-    const btnClearAll  = document.getElementById('btn-clear-all');
-    const countActiveEl= document.getElementById('todo-count-active');
-    const countTotalEl = document.getElementById('todo-count-total');
-    let filter = 'all'; // all | active | done
+  const active = todos.filter(t => t.status === "진행").length;
+  activeCountEl.textContent = active;
+  totalCountEl.textContent = todos.length;
+}
 
-    function load() {
-      try { return JSON.parse(localStorage.getItem(KEY) || '[]'); }
-      catch { return []; }
-    }
-    function save(arr) { localStorage.setItem(KEY, JSON.stringify(arr)); }
-    function uid() { return 't' + Math.random().toString(36).slice(2, 10); }
+// 추가
+async function addTodo(content) {
+  if (!content.trim()) return;
+  await fetch("/todos/add", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({content})
+  });
+  await loadTodos();
+}
 
-    function render() {
-      const items = load();
-      const filtered = items.filter(it =>
-        filter === 'all' ? true : (filter === 'active' ? !it.done : it.done)
-      );
-      listEl.innerHTML = filtered.length
-        ? filtered.map(it => liTemplate(it)).join('')
-        : `<li class="list-group-item text-center text-muted py-3">할 일이 없습니다.</li>`;
+// 완료 토글
+async function toggleTodo(id, currentStatus) {
+  const newStatus = currentStatus === "완료" ? "진행" : "완료";
+  await fetch(`/todos/update/${id}`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({status: newStatus})
+  });
+  await loadTodos();
+}
 
-      // 이벤트 바인딩
-      listEl.querySelectorAll('input[type=checkbox]').forEach(cb => {
-        cb.addEventListener('change', (e) => {
-          const id = e.target.getAttribute('data-id');
-          toggleDone(id, e.target.checked);
-        });
-      });
-      listEl.querySelectorAll('[data-action=del]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          remove(btn.getAttribute('data-id'));
-        });
-      });
+// 삭제
+async function deleteTodo(id) {
+  await fetch(`/todos/update/${id}`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({status: "삭제"})
+  });
+  await fetch(`/todos/delete_all`, {method: "POST"});
+  await loadTodos();
+}
 
-      // 카운트
-      const active = items.filter(it=>!it.done).length;
-      countActiveEl.textContent = active;
-      countTotalEl.textContent  = items.length;
-    }
-
-    function liTemplate(it){
-      const cls = it.done ? 'text-decoration-line-through text-muted' : '';
-      return `
-        <li class="list-group-item d-flex align-items-center justify-content-between">
-          <div class="form-check">
-            <input class="form-check-input me-2" type="checkbox" ${it.done ? 'checked' : ''} data-id="${it.id}" id="todo-${it.id}">
-            <label class="form-check-label ${cls}" for="todo-${it.id}">${escapeHtml(it.text)}</label>
-          </div>
-          <button class="btn btn-sm btn-outline-danger" data-action="del" data-id="${it.id}" title="삭제">
-            <i class="bi bi-x-lg"></i>
-          </button>
-        </li>`;
-    }
-
-    function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
-
-    function add(text){
-      const t = text.trim();
-      if(!t) return;
-      const items = load();
-      items.unshift({ id: uid(), text: t, done: false, createdAt: Date.now() });
-      save(items);
-      inputEl.value = '';
-      render();
-    }
-
-    function toggleDone(id, v){
-      const items = load();
-      const idx = items.findIndex(x=>x.id===id);
-      if(idx>=0){ items[idx].done = !!v; save(items); render(); }
-    }
-
-    function remove(id){
-      save(load().filter(x=>x.id!==id));
-      render();
-    }
-
-    function clearDone(){
-      save(load().filter(x=>!x.done));
-      render();
-    }
-
-    function clearAll(){
-      if(confirm('모든 할 일을 삭제할까요?')){ save([]); render(); }
-    }
-
-    // 이벤트
-    formEl.addEventListener('submit', (e)=>{
-      e.preventDefault();
-      add(inputEl.value);
+// 완료 항목 비우기
+async function clearDone() {
+  const res = await fetch("/todos");
+  const todos = await res.json();
+  for (const t of todos.filter(t => t.status === "완료")) {
+    await fetch(`/todos/update/${t.id}`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({status: "삭제"})
     });
-    btnClearDone.addEventListener('click', (e)=>{ e.preventDefault(); clearDone(); });
-    btnClearAll.addEventListener('click',  (e)=>{ e.preventDefault(); clearAll(); });
+  }
+  await fetch(`/todos/delete_all`, {method: "POST"});
+  await loadTodos();
+}
 
-    document.querySelectorAll('[data-filter]').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        document.querySelectorAll('[data-filter]').forEach(b=>b.classList.remove('active'));
-        btn.classList.add('active');
-        filter = btn.getAttribute('data-filter');
-        render();
-      });
-    });
+// 전체 삭제
+async function clearAll() {
+  if (!confirm("모든 할 일을 삭제하시겠습니까?")) return;
+  await fetch("/todos/delete_all", {method: "POST"});
+  await loadTodos();
+}
 
-    render();
-  })();
+// 이벤트 등록
+document.getElementById("todo-form").addEventListener("submit", e => {
+  e.preventDefault();
+  const input = document.getElementById("todo-input");
+  addTodo(input.value);
+  input.value = "";
+});
+
+document.querySelectorAll("[data-filter]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("[data-filter]").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    filter = btn.getAttribute("data-filter");
+    loadTodos();
+  });
+});
+
+document.getElementById("btn-clear-done").addEventListener("click", e => {
+  e.preventDefault();
+  clearDone();
+});
+document.getElementById("btn-clear-all").addEventListener("click", e => {
+  e.preventDefault();
+  clearAll();
+});
+
+loadTodos();
+</script>
+
+<!-- 캘린더 연동 -->
+<script>
+window.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'updateCurrentDate') {
+    document.getElementById('current-date').textContent = event.data.dateText || '';
+  }
+});
+function postCalendarNav(command) {
+  const ifr = document.getElementById('calendarIframe');
+  if (ifr && ifr.contentWindow) {
+    ifr.contentWindow.postMessage({ type: 'calendarNav', command }, '*');
+  }
+}
 </script>
 
 <!-- 장비 현황 + 공지사항 -->
@@ -290,7 +308,6 @@
   </div>
 </div>
 
-
 <!-- 일정 모달 -->
 <div class="modal fade" id="scheduleModal" tabindex="-1" aria-labelledby="scheduleModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -340,81 +357,7 @@
   </div>
 </div>
 
-<script>
-  // 캘린더 모달과 상호작용
-  let selectedDate = null;
-  let editMode     = false;
-  let editEventId  = null;
-
-  window.addEventListener('message', (event) => {
-    const data = event.data || {};
-    const modalEl = document.getElementById('scheduleModal');
-    const modal   = new bootstrap.Modal(modalEl);
-    const delBtn  = document.getElementById('deleteScheduleBtn');
-
-    if (data.type === 'openScheduleModal') {
-      editMode    = false;
-      editEventId = null;
-      selectedDate = data.start || null;
-
-      document.getElementById('schedule-title').value = '';
-      document.getElementById('schedule-start').value = '';
-      document.getElementById('schedule-end').value   = '';
-      document.getElementById('schedule-note').value  = '';
-      delBtn.classList.add('d-none');
-      modal.show();
-    }
-
-    if (data.type === 'editScheduleModal') {
-      editMode    = true;
-      editEventId = data.id;
-
-      document.getElementById('schedule-title').value = data.title || '';
-      document.getElementById('schedule-start').value = data.start || '';
-      document.getElementById('schedule-end').value   = data.end   || '';
-      document.getElementById('schedule-note').value  = data.note  || '';
-      delBtn.classList.remove('d-none');
-      modal.show();
-    }
-  });
-
-  document.addEventListener('DOMContentLoaded', () => {
-    const ifr = document.getElementById('calendarIframe');
-
-    document.getElementById('saveScheduleBtn').addEventListener('click', () => {
-      let title = document.getElementById('schedule-title').value.trim();
-      let start = document.getElementById('schedule-start').value;
-      let end   = document.getElementById('schedule-end').value;
-      let note  = document.getElementById('schedule-note').value ?? '';
-
-      if (!title) title = '제목 없음';
-      if (!start && selectedDate) start = selectedDate;
-      if (!end   && start)         end   = start;
-
-      if (ifr && ifr.contentWindow) {
-        ifr.contentWindow.postMessage({
-          type : 'addEvent',
-          id   : editEventId,
-          title, start, end, note
-        }, '*');
-      }
-
-      const modal = bootstrap.Modal.getInstance(document.getElementById('scheduleModal'));
-      modal.hide();
-    });
-
-    document.getElementById('deleteScheduleBtn').addEventListener('click', () => {
-      if (!editEventId) return;
-      if (ifr && ifr.contentWindow) {
-        ifr.contentWindow.postMessage({ type: 'deleteEvent', id: editEventId }, '*');
-      }
-      const modal = bootstrap.Modal.getInstance(document.getElementById('scheduleModal'));
-      modal.hide();
-    });
-  });
-</script>
-
-<!-- ===== Idle(무활동) 60분 타이머 & 자동 로그아웃 ===== -->
+<!-- 세션 타이머 -->
 <script>
 (function () {
   const IDLE_MINUTES = 60;
