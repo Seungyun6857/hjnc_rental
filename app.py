@@ -8,6 +8,7 @@ from io import BytesIO
 from datetime import datetime
 import pandas as pd
 
+from sqlalchemy import text
 from werkzeug.security import check_password_hash
 from werkzeug.security import generate_password_hash
 from sqlalchemy import create_engine, text, bindparam
@@ -2123,33 +2124,42 @@ def get_todos():
         """), {"u":user}).mappings().all()
     return jsonify([dict(r) for r in rows])
 
+# ✅ 할 일 추가
 @app.route("/todos/add", methods=["POST"])
 def add_todo():
-    data = request.get_json(silent=True) or {}
-    content = (data.get("content") or "").strip()
-    if not content: return jsonify({"ok":False,"error":"내용 없음"}),400
-    user = session.get("admin_name") or session.get("user_name") or "guest"
-    with engine.begin() as conn:
-        conn.execute(text("INSERT INTO todos (user_name,content,status) VALUES (:u,:c,'진행')"), {"u":user,"c":content})
-    return jsonify({"ok":True})
+    data = request.get_json()
+    content = data.get("content", "")
+    user_name = session.get("user_name", "관리자")
 
+    if not content:
+        return jsonify({"ok": False, "error": "내용이 비어있음"}), 400
+
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO todos (user_name, content, status)
+            VALUES (:user_name, :content, '진행')
+        """), {"user_name": user_name, "content": content})
+
+    return jsonify({"ok": True})
+
+
+# ✅ 상태 변경 (완료/삭제 등)
 @app.route("/todos/update/<int:todo_id>", methods=["POST"])
 def update_todo(todo_id):
-    data = request.get_json(silent=True) or {}
-    new_status = data.get("status")
-    if new_status not in ("진행","완료","삭제"):
-        return jsonify({"ok":False,"error":"invalid status"}),400
-    user = session.get("admin_name") or session.get("user_name") or "guest"
+    data = request.get_json()
+    new_status = data.get("status", "진행")
     with engine.begin() as conn:
-        conn.execute(text("UPDATE todos SET status=:s WHERE id=:i AND user_name=:u"), {"s":new_status,"i":todo_id,"u":user})
-    return jsonify({"ok":True})
+        conn.execute(text("UPDATE todos SET status = :status WHERE id = :id"),
+                     {"status": new_status, "id": todo_id})
+    return jsonify({"ok": True})
 
+
+# ✅ 삭제된 항목 전체 제거
 @app.route("/todos/delete_all", methods=["POST"])
 def delete_all_todos():
-    user = session.get("admin_name") or session.get("user_name") or "guest"
     with engine.begin() as conn:
-        conn.execute(text("DELETE FROM todos WHERE user_name=:u AND status='삭제'"), {"u":user})
-    return jsonify({"ok":True})
+        conn.execute(text("DELETE FROM todos WHERE status = '삭제'"))
+    return jsonify({"ok": True})
 
 # ---------------------------------------------------------------------
 # RUN
