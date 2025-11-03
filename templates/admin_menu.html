@@ -95,7 +95,24 @@ function postCalendarNav(command) {
 
 window.addEventListener("message", (event) => {
   if (event.data && event.data.type === "updateCurrentDate") {
-    document.getElementById("current-date").textContent = event.data.dateText || "";
+    try {
+      // 날짜 텍스트 처리
+      const rawDate = event.data.dateText;
+      if (rawDate && /^\d{4}-\d{2}-\d{2}/.test(rawDate)) {
+        const d = new Date(rawDate);
+        const year = d.getFullYear();
+        const month = d.getMonth() + 1; // ✅ 보정
+        document.getElementById("current-date").textContent = `${year}년 ${month}월`;
+      } else if (rawDate) {
+        document.getElementById("current-date").textContent = rawDate;
+      } else {
+        const now = new Date();
+        document.getElementById("current-date").textContent =
+          `${now.getFullYear()}년 ${now.getMonth() + 1}월`;
+      }
+    } catch (err) {
+      console.warn("날짜 표시 오류:", err);
+    }
   }
 });
 
@@ -108,6 +125,10 @@ document.addEventListener("DOMContentLoaded", () => {
         iframe.contentWindow.postMessage({ type: "openPicker" }, "*");
       }
     });
+
+    // ✅ 초기 로드시 오늘 날짜 표시
+    const now = new Date();
+    dateText.textContent = `${now.getFullYear()}년 ${now.getMonth() + 1}월`;
   }
 });
 </script>
