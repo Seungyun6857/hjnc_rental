@@ -407,21 +407,13 @@ def fault_category(category):
 # ---------------------------------------------------------------------
 # 3️⃣ 조치 요령 페이지 (fault_guides 폴더 내의 HTML 로드)
 # ---------------------------------------------------------------------
-@app.route("/fault/guide/<guide_id>")
-def fault_guide(guide_id):
-    """
-    예시:
-    /fault/guide/yt_device_connect → templates/fault_guides/yt_device_connect.html
-    /fault/guide/printer_paper_jam → templates/fault_guides/printer_paper_jam.html
-    """
-
-    path = f"fault_guides/{guide_id}.html"
-    full_path = os.path.join(app.template_folder, path)
-
-    if os.path.exists(full_path):
-        return render_template(path)
-    else:
-        abort(404)
+@app.route("/fault/guide/<category>/<guide>")
+def fault_guide(category, guide):
+    template_path = f"fault_guides/{category}/{guide}.html"
+    try:
+        return render_template(template_path)
+    except Exception as e:
+        return f"Guide not found: {template_path}<br>Error: {e}", 404
 
 # ---------------------------------------------------------------------
 # 대여 흐름

@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}단말기 내부 프로그램 장애 해결{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+  <!-- 제목 -->
+  <h3 class="fw-bold mb-3 text-center">단말기 내부 프로그램 장애 해결</h3>
+  <p class="text-muted text-center mb-4">단말기 내부 프로그램이 되지 않을 때 조치 방법입니다.</p>
+
+  <!-- 카드 1: 주요 증상 -->
+  <div class="card mb-4 shadow-sm">
+    <div class="card-body">
+      <h5 class="card-title fw-bold">📌 주요 증상</h5>
+      <ul class="mt-3">
+        <li>단말기 프로그램 접속이 안됨</li>
+        <li>단말기 터치해도 동작이 안됨</li>
+        <li>단말기 시간 설정이 안맞음</li>
+        <li>단말기 화면이 너무 밝거나 어두움</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 카드 2: 원인 -->
+  <div class="card mb-4 shadow-sm">
+    <div class="card-body">
+      <h5 class="card-title fw-bold">🔍 가능 원인</h5>
+      <ul class="mt-3">
+        <li>프로그램 일시적인 오류</li>
+        <li>단말기 발열에 의한 오류</li>
+        <li>재부팅 과정에서에 의한 오류</li>
+        <li>전 근무자에 의한 설정에 대한 불편함</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 카드 3: 조치 방법 -->
+  <div class="card mb-4 shadow-sm">
+    <div class="card-body">
+      <h5 class="card-title fw-bold">🛠 조치 방법</h5>
+
+      <ol class="mt-3">
+        <li><b>단말기 재부팅</b>
+          <ul>
+            <li>단말기 강제로 껐다가 킨후 확인할것</li>
+            <li>전원 버튼을 (7~15초)이상 눌러서 강제로 꺼지는지 확인할것</li>
+            <li>같은 방식으로 전원 버튼을 (7~15초)이상 눌러서 강제로 켜지는지 확인할것</li>
+            <li>위 방식으로 했는데도 안된다면 전원 버튼을 다시 한번 눌러볼 것</li>
+            <li>그래도 안된다면 배터리를 탈부착후 다시 한번 시도 할것</li>
+            <li>위 과정을 통해 (터치 장애, 화면 멈춤)증상이 해결되는것을 확인</li>
+          </ul>
+        </li>
+
+        <li class="mt-2"><b>시간 설정</b>
+          <ul>
+            <li>시작 -> 설정 -> 시간 및 언어 -> 날짜 및 시간 -> 날짜 및 시간 변경 -> 해당 날짜 및 시간 설정후 확인</li>
+          </ul>
+        </li>
+
+        <li class="mt-2"><b>화면이 너무 어둡거나 밝음</b>
+          <ul>
+            <li>시작 -> 설정 -> 시스템 -> 중간에 화면 밝기 조절이 있다</li>
+          </ul>
+        </li>
+
+        <li class="mt-2"><b>위 방법으로도 조치가 안될시 조치사항</b>
+          <ul>
+            <li>통제실에 연락후 조치</li>
+          </ul>
+        </li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- 카드 4: 이미지 영역 (선택/확장 가능) -->
+  <div class="card mb-4 shadow-sm">
+    <div class="card-body">
+      <h5 class="card-title fw-bold">📷 참고 이미지</h5>
+      <p class="text-muted small">필요 시 단말기/모뎀 사진 추가 가능</p>
+
+      <!-- 예시 이미지 영역 -->
+      <div class="text-center">
+        <img src="/static/img/sample_device_connect.png"
+             class="img-fluid rounded shadow-sm"
+             style="max-width: 300px;"
+             alt="샘플 이미지">
+      </div>
+    </div>
+  </div>
+
+  <!-- 뒤로가기 버튼 -->
+  <div class="text-center mt-4">
+    <a href="{{ url_for('fault_category', category='yt') }}"
+       class="btn btn-secondary">
+      ← 뒤로가기
+    </a>
+  </div>
+
+</div>
+{% endblock %}

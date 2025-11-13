@@ -4,56 +4,140 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>우주정보통신 시스템</title>
+
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
   <style>
-    body {
-      background-color: #f8f9fa;
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
       font-family: 'Noto Sans KR', sans-serif;
+      background: linear-gradient(135deg, #dde6f3 0%, #eef2f7 100%);
+      height: 100%;
+    }
+
+    /* 메인 레이아웃 */
+    .main-container {
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
-    }
-    h1 {
-      font-weight: 700;
-      margin-bottom: 50px;
-      color: #212529;
-    }
-    .btn-lg {
-      padding: 15px 0;
-      font-size: 1.25rem;
-      border-radius: 10px;
-      transition: all 0.2s ease;
-    }
-    .btn-lg:hover {
-      transform: translateY(-2px);
-    }
-    footer {
-      position: fixed;
-      bottom: 20px;
-      width: 100%;
+      padding: 20px;
       text-align: center;
-      color: #6c757d;
-      font-size: 0.9rem;
     }
+
+    /* 로고 아이콘 */
+    .logo-circle {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+      margin-bottom: 25px;
+      font-weight: 700;
+      color: #3b82f6;
+      font-size: 1.5rem;
+    }
+
+    /* 타이틀 */
+    h1 {
+      font-size: clamp(1.8rem, 3vw, 2.6rem);
+      font-weight: 700;
+      margin-bottom: 30px;
+      color: #1e293b;
+    }
+
+    /* Glassmorphism 카드 */
+    .glass-card {
+      background: rgba(255, 255, 255, 0.55);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-radius: 20px;
+      padding: 30px 25px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+    }
+
+    /* 버튼 */
+    .menu-btn {
+      padding: 15px;
+      border-radius: 12px;
+      font-size: 1.2rem;
+      font-weight: 600;
+      transition: all .25s ease;
+    }
+
+    .menu-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 7px 14px rgba(0,0,0,0.15);
+    }
+
+    .btn-user {
+      background: #2563eb;
+      color: white;
+    }
+
+    .btn-user:hover {
+      background: #1d4ed8;
+      color: white;
+    }
+
+    .btn-admin {
+      background: #111827;
+      color: white;
+    }
+
+    .btn-admin:hover {
+      background: #0f172a;
+      color: white;
+    }
+
+    footer {
+      margin-top: 30px;
+      color: #475569;
+      font-size: 0.85rem;
+    }
+
   </style>
 </head>
+
 <body>
-  <main class="text-center">
+  <div class="main-container">
+
+    <!-- 로고(아이콘) -->
+    <div class="logo-circle">
+      WJ
+    </div>
+
+    <!-- 타이틀 -->
     <h1>우주정보통신 시스템</h1>
 
-    <div class="d-grid gap-3" style="max-width: 400px; margin: 0 auto;">
-      <!-- 사용자: 중간 메뉴 페이지로 이동 -->
-      <a href="{{ url_for('user_choice') }}" class="btn btn-primary btn-lg">사용자</a>
+    <!-- Glassmorphic 카드 -->
+    <div class="glass-card">
 
-      <!-- 관리자: 로그인 페이지로 이동 -->
-      <a href="{{ url_for('admin_login') }}" class="btn btn-secondary btn-lg">관리자</a>
+      <div class="d-grid gap-3">
+        <!-- 사용자 -->
+        <a href="{{ url_for('user_choice') }}" class="menu-btn btn-user">
+          사용자
+        </a>
+
+        <!-- 관리자 -->
+        <a href="{{ url_for('admin_login') }}" class="menu-btn btn-admin">
+          관리자
+        </a>
+      </div>
     </div>
-  </main>
 
-  <footer>
-    © 2025 우주정보통신 · Tel 051-220-2240 · Ph 010-8703-6857
-  </footer>
+    <!-- 푸터 -->
+    <footer>
+      © 2025 우주정보통신 · Tel 051-220-2240 · Ph 010-8703-6857
+    </footer>
+  </div>
 </body>
 </html>
