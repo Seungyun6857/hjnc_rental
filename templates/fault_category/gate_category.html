@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}게이트 장애유형{% endblock %}
+{% block content %}
+<div class="container text-center py-4">
+  <h3 class="fw-bold mb-3">게이트 장애유형</h3>
+  <div class="d-flex flex-wrap justify-content-center gap-3">
+    <a href="{{ url_for('fault_guide', guide_id='gate_sensor_error') }}" class="btn btn-outline-primary px-4 py-2">센서 인식 불량</a>
+    <a href="{{ url_for('fault_guide', guide_id='gate_motor_fail') }}" class="btn btn-outline-primary px-4 py-2">모터 작동 불량</a>
+  </div>
+</div>
+{% endblock %}

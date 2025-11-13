@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}PDA 장애유형{% endblock %}
+{% block content %}
+<div class="container text-center py-4">
+  <h3 class="fw-bold mb-3">PDA 장애유형</h3>
+  <div class="d-flex flex-wrap justify-content-center gap-3">
+    <a href="{{ url_for('fault_guide', guide_id='pda_wifi_fail') }}" class="btn btn-outline-primary px-4 py-2">Wi-Fi 연결 불량</a>
+    <a href="{{ url_for('fault_guide', guide_id='pda_touch_error') }}" class="btn btn-outline-primary px-4 py-2">터치 미작동</a>
+  </div>
+</div>
+{% endblock %}

@@ -348,14 +348,80 @@ def _build_equipment_filters(req):
 # ---------------------------------------------------------------------
 # 사용자 메뉴
 # ---------------------------------------------------------------------
-@app.route("/")
+@app.route('/')
 def index():
-    return render_template("index.html")
+    return render_template('index.html')
 
-@app.route("/user_menu")
+# 사용자 선택 페이지
+@app.route('/user')
+def user_choice():
+    return render_template('user_choice.html')
+
+# 장비 대여 메뉴
+@app.route('/user/menu')
 def user_menu():
-    return render_template("user_menu.html")
+    return render_template('user_menu.html')
 
+
+# ---------------------------------------------------------------------
+# 1️⃣ 장애조치 대분류 선택 페이지
+# ---------------------------------------------------------------------
+@app.route("/fault/select")
+def fault_select():
+    """
+    메인 페이지 — 사용자가 장비 종류(YT, RS, STS, PC 등)를 선택하는 화면
+    """
+    return render_template("fault_select.html")
+
+
+# ---------------------------------------------------------------------
+# 2️⃣ 장비별 중분류 페이지 (fault_category 폴더 내의 HTML 로드)
+# ---------------------------------------------------------------------
+@app.route("/fault/<category>")
+def fault_category(category):
+    """
+    예시:
+    /fault/yt      → templates/fault_category/yt_category.html
+    /fault/sts     → templates/fault_category/sts_category.html
+    /fault/rs      → templates/fault_category/rs_category.html
+    /fault/pc      → templates/fault_category/pc_category.html
+    /fault/printer → templates/fault_category/printer_category.html
+    /fault/monitor → templates/fault_category/monitor_category.html
+    /fault/gate    → templates/fault_category/gate_category.html
+    /fault/cctv    → templates/fault_category/cctv_category.html
+    /fault/pda     → templates/fault_category/pda_category.html
+    /fault/rfid    → templates/fault_category/rfid_category.html
+    /fault/etc     → templates/fault_category/etc_category.html
+    """
+
+    category = category.strip().lower()
+    template_name = f"fault_category/{category}_category.html"
+    full_path = os.path.join(app.template_folder, template_name)
+
+    if os.path.exists(full_path):
+        return render_template(template_name)
+    else:
+        abort(404)  # 해당 장비용 HTML이 없을 경우
+
+
+# ---------------------------------------------------------------------
+# 3️⃣ 조치 요령 페이지 (fault_guides 폴더 내의 HTML 로드)
+# ---------------------------------------------------------------------
+@app.route("/fault/guide/<guide_id>")
+def fault_guide(guide_id):
+    """
+    예시:
+    /fault/guide/yt_device_connect → templates/fault_guides/yt_device_connect.html
+    /fault/guide/printer_paper_jam → templates/fault_guides/printer_paper_jam.html
+    """
+
+    path = f"fault_guides/{guide_id}.html"
+    full_path = os.path.join(app.template_folder, path)
+
+    if os.path.exists(full_path):
+        return render_template(path)
+    else:
+        abort(404)
 
 # ---------------------------------------------------------------------
 # 대여 흐름

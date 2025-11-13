@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}RFID 장애유형{% endblock %}
+{% block content %}
+<div class="container text-center py-4">
+  <h3 class="fw-bold mb-3">RFID 장애유형</h3>
+  <div class="d-flex flex-wrap justify-content-center gap-3">
+    <a href="{{ url_for('fault_guide', guide_id='rfid_tag_error') }}" class="btn btn-outline-primary px-4 py-2">태그 인식 불량</a>
+    <a href="{{ url_for('fault_guide', guide_id='rfid_reader_fail') }}" class="btn btn-outline-primary px-4 py-2">리더기 인식 불량</a>
+  </div>
+</div>
+{% endblock %}

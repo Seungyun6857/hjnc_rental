@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}사용자 메뉴 선택 | 우주정보통신{% endblock %}
+
+{% block content %}
+  <div class="d-flex flex-column align-items-center">
+    <a href="{{ url_for('user_menu') }}" class="btn btn-primary btn-lg mb-3" style="width:300px;">장비 대여</a>
+    <a href="{{ url_for('fault_select') }}" class="btn btn-outline-danger btn-lg" style="width:300px;">장애 발생</a>
+  </div>
+{% endblock %}
